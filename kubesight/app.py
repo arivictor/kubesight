@@ -6,22 +6,33 @@ from flask import Flask, render_template, jsonify, request
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
 
+# Flag to track if Kubernetes is available
+K8S_AVAILABLE = False
+
 
 def create_app():
     """Create and configure the Flask application."""
+    global K8S_AVAILABLE
+    
     app = Flask(__name__)
     app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key')
+    app.config['USE_MOCK_DATA'] = os.environ.get('USE_MOCK_DATA', 'false').lower() == 'true'
     
     # Initialize Kubernetes client
     try:
         # Try to load in-cluster config first (for running inside K8s)
         config.load_incluster_config()
+        K8S_AVAILABLE = True
+        app.logger.info("Using in-cluster Kubernetes configuration")
     except config.ConfigException:
         # Fall back to local kubeconfig (for development)
         try:
             config.load_kube_config()
+            K8S_AVAILABLE = True
+            app.logger.info("Using local Kubernetes configuration")
         except config.ConfigException:
             app.logger.warning("No Kubernetes configuration found. Using mock data.")
+            app.config['USE_MOCK_DATA'] = True
     
     return app
 
@@ -78,6 +89,10 @@ def index():
 @app.route('/api/namespaces')
 def get_namespaces():
     """Get list of namespaces."""
+    if app.config.get('USE_MOCK_DATA'):
+        from kubesight.mock_data import get_mock_namespaces
+        return jsonify(get_mock_namespaces())
+    
     try:
         v1 = get_k8s_client()
         namespaces = v1.list_namespace()
@@ -99,6 +114,11 @@ def get_pods():
     """Get list of pods, optionally filtered by namespace."""
     namespace = request.args.get('namespace', 'default')
     search = request.args.get('search', '').lower()
+    
+    if app.config.get('USE_MOCK_DATA'):
+        from kubesight.mock_data import get_mock_pods
+        pod_list = get_mock_pods(namespace, search)
+        return render_template('pods_table.html', pods=pod_list)
     
     try:
         v1 = get_k8s_client()
@@ -149,6 +169,10 @@ def get_pods():
 @app.route('/api/pods/<namespace>/<pod_name>')
 def get_pod_details(namespace, pod_name):
     """Get detailed information about a specific pod."""
+    if app.config.get('USE_MOCK_DATA'):
+        from kubesight.mock_data import get_mock_pod_details
+        return jsonify(get_mock_pod_details(namespace, pod_name))
+    
     try:
         v1 = get_k8s_client()
         pod = v1.read_namespaced_pod(pod_name, namespace)
@@ -215,6 +239,10 @@ def get_pod_logs(namespace, pod_name):
     container = request.args.get('container')
     tail_lines = request.args.get('tail', 100, type=int)
     
+    if app.config.get('USE_MOCK_DATA'):
+        from kubesight.mock_data import get_mock_pod_logs
+        return jsonify(get_mock_pod_logs(namespace, pod_name, container))
+    
     try:
         v1 = get_k8s_client()
         
@@ -246,6 +274,9 @@ def get_pod_logs(namespace, pod_name):
 @app.route('/api/pods/<namespace>/<pod_name>', methods=['DELETE'])
 def delete_pod(namespace, pod_name):
     """Delete a pod."""
+    if app.config.get('USE_MOCK_DATA'):
+        return jsonify({'message': f'Pod {pod_name} deleted successfully (mock mode)'})
+    
     try:
         v1 = get_k8s_client()
         v1.delete_namespaced_pod(pod_name, namespace)
@@ -262,6 +293,9 @@ def delete_pod(namespace, pod_name):
 @app.route('/api/pods/<namespace>/<pod_name>/restart', methods=['POST'])
 def restart_pod(namespace, pod_name):
     """Restart a pod by deleting it (it will be recreated by its controller)."""
+    if app.config.get('USE_MOCK_DATA'):
+        return jsonify({'message': f'Pod {pod_name} restarted successfully (mock mode)'})
+    
     try:
         v1 = get_k8s_client()
         v1.delete_namespaced_pod(pod_name, namespace)
