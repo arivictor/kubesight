@@ -1,0 +1,10 @@
+[project]
+name = "kubesight"
+version = "0.1.0"
+description = "Full-featured Kubernetes monitoring service with Flask and HTMX"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "flask>=3.1.2",
+    "kubernetes>=34.1.0",
+]

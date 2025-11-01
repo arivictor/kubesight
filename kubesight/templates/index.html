@@ -1,0 +1,362 @@
+{% extends "base.html" %}
+
+{% block title %}KubeSight - Dashboard{% endblock %}
+
+{% block content %}
+<div class="dashboard">
+    <div class="controls">
+        <div class="control-group">
+            <label for="namespace-select">Namespace:</label>
+            <select id="namespace-select" 
+                    hx-get="/api/pods" 
+                    hx-target="#pods-table" 
+                    hx-swap="innerHTML"
+                    hx-trigger="change"
+                    hx-include="[name='search']">
+                <option value="default">default</option>
+                <option value="all">All Namespaces</option>
+            </select>
+        </div>
+        
+        <div class="control-group">
+            <label for="search-input">Search:</label>
+            <input type="text" 
+                   id="search-input" 
+                   name="search" 
+                   placeholder="Search pods..."
+                   hx-get="/api/pods" 
+                   hx-target="#pods-table" 
+                   hx-swap="innerHTML"
+                   hx-trigger="keyup changed delay:500ms"
+                   hx-include="[name='namespace']">
+        </div>
+        
+        <div class="control-group">
+            <button class="btn btn-primary" 
+                    hx-get="/api/pods" 
+                    hx-target="#pods-table" 
+                    hx-swap="innerHTML"
+                    hx-include="[name='namespace'],[name='search']">
+                🔄 Refresh
+            </button>
+        </div>
+    </div>
+    
+    <div id="pods-table" 
+         hx-get="/api/pods?namespace=default" 
+         hx-trigger="load"
+         hx-swap="innerHTML">
+        <div class="loading">Loading pods...</div>
+    </div>
+    
+    <div id="pod-modal" class="modal"></div>
+</div>
+
+<script>
+// Add namespace parameter to pods requests
+document.getElementById('namespace-select').addEventListener('change', function(e) {
+    const namespace = e.target.value;
+    const searchInput = document.getElementById('search-input');
+    
+    // Update HTMX attributes with namespace parameter
+    const podsTable = document.getElementById('pods-table');
+    const currentParams = new URLSearchParams();
+    currentParams.set('namespace', namespace);
+    if (searchInput.value) {
+        currentParams.set('search', searchInput.value);
+    }
+    
+    htmx.ajax('GET', '/api/pods?' + currentParams.toString(), {
+        target: '#pods-table',
+        swap: 'innerHTML'
+    });
+});
+
+document.getElementById('search-input').addEventListener('input', function(e) {
+    const search = e.target.value;
+    const namespaceSelect = document.getElementById('namespace-select');
+    const namespace = namespaceSelect.value;
+    
+    const currentParams = new URLSearchParams();
+    currentParams.set('namespace', namespace);
+    if (search) {
+        currentParams.set('search', search);
+    }
+    
+    clearTimeout(window.searchTimeout);
+    window.searchTimeout = setTimeout(() => {
+        htmx.ajax('GET', '/api/pods?' + currentParams.toString(), {
+            target: '#pods-table',
+            swap: 'innerHTML'
+        });
+    }, 500);
+});
+
+// Load namespaces
+fetch('/api/namespaces')
+    .then(response => response.json())
+    .then(data => {
+        const select = document.getElementById('namespace-select');
+        select.innerHTML = '<option value="all">All Namespaces</option>';
+        
+        if (data.namespaces) {
+            data.namespaces.forEach(ns => {
+                const option = document.createElement('option');
+                option.value = ns.name;
+                option.textContent = ns.name;
+                if (ns.name === 'default') {
+                    option.selected = true;
+                }
+                select.appendChild(option);
+            });
+        }
+    })
+    .catch(error => console.error('Error loading namespaces:', error));
+
+// Handle HTMX responses
+document.body.addEventListener('htmx:afterSwap', function(event) {
+    if (event.detail.target.id === 'pods-table') {
+        // Pods table updated successfully
+        console.log('Pods table updated');
+    }
+});
+
+// Handle pod actions
+function showPodDetails(namespace, podName) {
+    fetch(`/api/pods/${namespace}/${podName}`)
+        .then(response => response.json())
+        .then(data => {
+            renderPodDetails(data);
+        })
+        .catch(error => {
+            console.error('Error loading pod details:', error);
+            alert('Failed to load pod details');
+        });
+}
+
+function showPodLogs(namespace, podName, container) {
+    const params = new URLSearchParams();
+    if (container) {
+        params.set('container', container);
+    }
+    
+    fetch(`/api/pods/${namespace}/${podName}/logs?${params.toString()}`)
+        .then(response => response.json())
+        .then(data => {
+            renderPodLogs(data, namespace, podName);
+        })
+        .catch(error => {
+            console.error('Error loading pod logs:', error);
+            alert('Failed to load pod logs');
+        });
+}
+
+function deletePod(namespace, podName) {
+    if (!confirm(`Are you sure you want to delete pod ${podName}?`)) {
+        return;
+    }
+    
+    fetch(`/api/pods/${namespace}/${podName}`, {
+        method: 'DELETE'
+    })
+        .then(response => response.json())
+        .then(data => {
+            alert(data.message || 'Pod deleted successfully');
+            closeModal();
+            refreshPods();
+        })
+        .catch(error => {
+            console.error('Error deleting pod:', error);
+            alert('Failed to delete pod');
+        });
+}
+
+function restartPod(namespace, podName) {
+    if (!confirm(`Are you sure you want to restart pod ${podName}?`)) {
+        return;
+    }
+    
+    fetch(`/api/pods/${namespace}/${podName}/restart`, {
+        method: 'POST'
+    })
+        .then(response => response.json())
+        .then(data => {
+            alert(data.message || 'Pod restarted successfully');
+            closeModal();
+            refreshPods();
+        })
+        .catch(error => {
+            console.error('Error restarting pod:', error);
+            alert('Failed to restart pod');
+        });
+}
+
+function renderPodDetails(pod) {
+    const modal = document.getElementById('pod-modal');
+    
+    let containersHtml = '';
+    if (pod.containers && pod.containers.length > 0) {
+        containersHtml = pod.containers.map(c => `
+            <tr>
+                <td>${c.name}</td>
+                <td>${c.image}</td>
+                <td><span class="status-badge ${c.ready ? 'status-running' : 'status-pending'}">${c.ready ? 'Ready' : 'Not Ready'}</span></td>
+                <td>${c.restart_count}</td>
+                <td>
+                    <button class="btn btn-sm btn-secondary" onclick="showPodLogs('${pod.namespace}', '${pod.name}', '${c.name}')">
+                        📜 Logs
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+    }
+    
+    let labelsHtml = '';
+    if (pod.labels && Object.keys(pod.labels).length > 0) {
+        labelsHtml = Object.entries(pod.labels).map(([key, value]) => 
+            `<span class="label">${key}: ${value}</span>`
+        ).join('');
+    } else {
+        labelsHtml = '<span class="text-muted">No labels</span>';
+    }
+    
+    let conditionsHtml = '';
+    if (pod.conditions && pod.conditions.length > 0) {
+        conditionsHtml = pod.conditions.map(c => `
+            <tr>
+                <td>${c.type}</td>
+                <td><span class="status-badge ${c.status === 'True' ? 'status-running' : 'status-pending'}">${c.status}</span></td>
+                <td>${c.reason}</td>
+                <td>${c.last_transition}</td>
+            </tr>
+        `).join('');
+    }
+    
+    modal.innerHTML = `
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Pod Details: ${pod.name}</h2>
+                <button class="btn-close" onclick="closeModal()">&times;</button>
+            </div>
+            
+            <div class="modal-body">
+                <div class="detail-section">
+                    <h3>Overview</h3>
+                    <table class="detail-table">
+                        <tr><td><strong>Namespace:</strong></td><td>${pod.namespace}</td></tr>
+                        <tr><td><strong>Status:</strong></td><td><span class="status-badge status-${pod.status.toLowerCase()}">${pod.status}</span></td></tr>
+                        <tr><td><strong>Node:</strong></td><td>${pod.node}</td></tr>
+                        <tr><td><strong>IP:</strong></td><td>${pod.ip}</td></tr>
+                        <tr><td><strong>Age:</strong></td><td>${pod.age}</td></tr>
+                        <tr><td><strong>Created:</strong></td><td>${pod.created}</td></tr>
+                    </table>
+                </div>
+                
+                <div class="detail-section">
+                    <h3>Labels</h3>
+                    <div class="labels-container">
+                        ${labelsHtml}
+                    </div>
+                </div>
+                
+                <div class="detail-section">
+                    <h3>Containers</h3>
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Image</th>
+                                <th>Status</th>
+                                <th>Restarts</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${containersHtml}
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div class="detail-section">
+                    <h3>Conditions</h3>
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Type</th>
+                                <th>Status</th>
+                                <th>Reason</th>
+                                <th>Last Transition</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${conditionsHtml}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <div class="modal-footer">
+                <button class="btn btn-danger" onclick="deletePod('${pod.namespace}', '${pod.name}')">
+                    🗑️ Delete Pod
+                </button>
+                <button class="btn btn-warning" onclick="restartPod('${pod.namespace}', '${pod.name}')">
+                    🔄 Restart Pod
+                </button>
+                <button class="btn btn-secondary" onclick="closeModal()">Close</button>
+            </div>
+        </div>
+    `;
+    
+    modal.classList.add('show');
+}
+
+function renderPodLogs(data, namespace, podName) {
+    const modal = document.getElementById('pod-modal');
+    
+    modal.innerHTML = `
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h2>Logs: ${podName} (${data.container})</h2>
+                <button class="btn-close" onclick="closeModal()">&times;</button>
+            </div>
+            
+            <div class="modal-body">
+                <div class="logs-container">
+                    <pre>${data.logs || 'No logs available'}</pre>
+                </div>
+            </div>
+            
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal()">Close</button>
+            </div>
+        </div>
+    `;
+    
+    modal.classList.add('show');
+}
+
+function closeModal() {
+    const modal = document.getElementById('pod-modal');
+    modal.classList.remove('show');
+    modal.innerHTML = '';
+}
+
+function refreshPods() {
+    const namespaceSelect = document.getElementById('namespace-select');
+    const searchInput = document.getElementById('search-input');
+    const namespace = namespaceSelect.value;
+    const search = searchInput.value;
+    
+    const params = new URLSearchParams();
+    params.set('namespace', namespace);
+    if (search) {
+        params.set('search', search);
+    }
+    
+    htmx.ajax('GET', '/api/pods?' + params.toString(), {
+        target: '#pods-table',
+        swap: 'innerHTML'
+    });
+}
+</script>
+{% endblock %}
