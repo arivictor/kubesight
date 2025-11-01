@@ -468,6 +468,33 @@ footer {
     }
 }
 
+/* Loading and refresh indicators */
+.refresh-indicator {
+    background-color: #e3f2fd;
+    border-left: 4px solid var(--primary-color);
+    padding: 0.5rem 1rem;
+    margin-bottom: 1rem;
+    color: var(--primary-color);
+    font-weight: 500;
+    border-radius: 0 4px 4px 0;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.refresh-indicator.htmx-request {
+    opacity: 1;
+}
+
+.auto-refresh-control {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.auto-refresh-control input[type="checkbox"] {
+    margin: 0;
+}
+
 /* Animations */
 @keyframes fadeIn {
     from {
@@ -480,6 +507,19 @@ footer {
     }
 }
 
+@keyframes pulse {
+    0%, 100% {
+        opacity: 0.7;
+    }
+    50% {
+        opacity: 1;
+    }
+}
+
 .modal.show .modal-content {
     animation: fadeIn 0.3s ease-out;
+}
+
+.refresh-indicator.htmx-request small {
+    animation: pulse 1.5s ease-in-out infinite;
 }

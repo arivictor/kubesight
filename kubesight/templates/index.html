@@ -36,11 +36,27 @@
                 🔄 Refresh
             </button>
         </div>
+        
+        <div class="control-group auto-refresh-control">
+            <label>
+                <input type="checkbox" 
+                       id="auto-refresh" 
+                       checked 
+                       _="on change 
+                          if me.checked 
+                            add @hx-trigger='load, every 5s' to #pods-table 
+                          else 
+                            remove @hx-trigger from #pods-table then add @hx-trigger='load' to #pods-table">
+                Auto-refresh (5s)
+            </label>
+        </div>
     </div>
     
     <div id="pods-table"
          hx-get="/api/pods?namespace=default" 
-         hx-trigger="load">
+         hx-trigger="load, every 5s"
+         hx-include="[name='namespace'],[name='search']"
+         hx-indicator=".refresh-indicator">
         <div class="loading">Loading pods...</div>
     </div>
     
