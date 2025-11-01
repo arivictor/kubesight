@@ -2,9 +2,55 @@
 
 import os
 from datetime import datetime
-from flask import Flask, render_template, jsonify, request
+from flask import Flask, render_template, jsonify, request, session, redirect, url_for
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
+
+
+def get_available_contexts():
+    """Get list of available Kubernetes contexts from kubeconfig."""
+    try:
+        contexts, active_context = config.list_kube_config_contexts()
+        context_list = []
+        for context in contexts:
+            context_info = {
+                'name': context['name'],
+                'cluster': context['context'].get('cluster', ''),
+                'user': context['context'].get('user', ''),
+                'namespace': context['context'].get('namespace', 'default'),
+                'is_active': context['name'] == active_context['name'] if active_context else False
+            }
+            context_list.append(context_info)
+        return context_list, active_context['name'] if active_context else None
+    except Exception as e:
+        return [], None
+
+
+def is_running_in_cluster():
+    """Check if the application is running inside a Kubernetes cluster."""
+    return os.path.exists('/var/run/secrets/kubernetes.io/serviceaccount/token')
+
+
+def load_k8s_config(context_name=None):
+    """Load Kubernetes configuration with optional context selection."""
+    try:
+        if is_running_in_cluster():
+            # Running inside a cluster - use service account
+            config.load_incluster_config()
+            return True, "in-cluster", "Using in-cluster service account configuration"
+        else:
+            # Running locally - use kubeconfig
+            if context_name:
+                config.load_kube_config(context=context_name)
+                return True, context_name, f"Using Kubernetes context: {context_name}"
+            else:
+                config.load_kube_config()
+                contexts, active_context = config.list_kube_config_contexts()
+                return True, active_context['name'] if active_context else 'default', f"Using default Kubernetes context"
+    except config.ConfigException as e:
+        return False, None, f"Kubernetes configuration error: {str(e)}"
+    except Exception as e:
+        return False, None, f"Unexpected error loading Kubernetes config: {str(e)}"
 
 
 def create_app():
@@ -12,20 +58,19 @@ def create_app():
     app = Flask(__name__)
     app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key')
     app.config['USE_MOCK_DATA'] = os.environ.get('USE_MOCK_DATA', 'false').lower() == 'true'
+    app.config['RUNNING_IN_CLUSTER'] = is_running_in_cluster()
     
     # Initialize Kubernetes client
-    try:
-        # Try to load in-cluster config first (for running inside K8s)
-        config.load_incluster_config()
-        app.logger.info("Using in-cluster Kubernetes configuration")
-    except config.ConfigException:
-        # Fall back to local kubeconfig (for development)
-        try:
-            config.load_kube_config()
-            app.logger.info("Using local Kubernetes configuration")
-        except config.ConfigException:
-            app.logger.warning("No Kubernetes configuration found. Using mock data.")
+    if not app.config['USE_MOCK_DATA']:
+        success, context, message = load_k8s_config()
+        if success:
+            app.config['K8S_CONTEXT'] = context
+            app.config['K8S_MESSAGE'] = message
+            app.logger.info(message)
+        else:
+            app.logger.warning(f"Failed to load Kubernetes config: {message}")
             app.config['USE_MOCK_DATA'] = True
+            app.config['K8S_MESSAGE'] = f"Using mock data: {message}"
     
     return app
 
@@ -36,6 +81,11 @@ app = create_app()
 def get_k8s_client():
     """Get Kubernetes API client."""
     return client.CoreV1Api()
+
+
+def get_metrics_client():
+    """Get Kubernetes Metrics API client."""
+    return client.CustomObjectsApi()
 
 
 def format_age(created_time):
@@ -73,10 +123,206 @@ def get_pod_status(pod):
     return pod.status.phase
 
 
+def format_cpu_usage(cpu_str):
+    """Format CPU usage from metrics API."""
+    if not cpu_str:
+        return "N/A"
+    
+    # CPU can be in nanocores (n) or millicores (m)
+    if cpu_str.endswith('n'):
+        # Nanocores to millicores
+        nanocores = int(cpu_str[:-1])
+        millicores = nanocores / 1_000_000
+        return f"{millicores:.1f}m"
+    elif cpu_str.endswith('m'):
+        # Already in millicores
+        return cpu_str
+    else:
+        # Assume it's in cores, convert to millicores
+        cores = float(cpu_str)
+        return f"{cores * 1000:.1f}m"
+
+
+def parse_memory_to_bytes(memory_str):
+    """Convert memory string to bytes for calculations."""
+    if not memory_str:
+        return 0
+    
+    memory_str = memory_str.strip()
+    if memory_str.endswith('Ki'):
+        return int(float(memory_str[:-2]) * 1024)
+    elif memory_str.endswith('Mi'):
+        return int(float(memory_str[:-2]) * 1024 * 1024)
+    elif memory_str.endswith('Gi'):
+        return int(float(memory_str[:-2]) * 1024 * 1024 * 1024)
+    elif memory_str.endswith('Ti'):
+        return int(float(memory_str[:-2]) * 1024 * 1024 * 1024 * 1024)
+    else:
+        # Assume bytes
+        return int(float(memory_str))
+
+
+def parse_cpu_to_millicores(cpu_str):
+    """Convert CPU string to millicores for calculations."""
+    if not cpu_str:
+        return 0
+    
+    cpu_str = cpu_str.strip()
+    if cpu_str.endswith('n'):
+        # Nanocores to millicores
+        return float(cpu_str[:-1]) / 1_000_000
+    elif cpu_str.endswith('m'):
+        # Already in millicores
+        return float(cpu_str[:-1])
+    else:
+        # Assume it's in cores, convert to millicores
+        return float(cpu_str) * 1000
+
+
+def format_memory_usage(memory_str):
+    """Format memory usage from metrics API."""
+    if not memory_str:
+        return "N/A"
+    
+    bytes_val = parse_memory_to_bytes(memory_str)
+    
+    if bytes_val >= 1024 * 1024 * 1024:
+        return f"{bytes_val / (1024 * 1024 * 1024):.1f}Gi"
+    elif bytes_val >= 1024 * 1024:
+        return f"{bytes_val / (1024 * 1024):.1f}Mi"
+    elif bytes_val >= 1024:
+        return f"{bytes_val / 1024:.1f}Ki"
+    return f"{bytes_val}B"
+
+
+def format_memory_with_percentage(used_str, requested_str):
+    """Format memory usage with percentage and ratio."""
+    if not used_str:
+        return "N/A"
+    
+    used_bytes = parse_memory_to_bytes(used_str)
+    
+    if not requested_str:
+        # No limit/request specified, just show usage
+        return format_memory_usage(used_str)
+    
+    requested_bytes = parse_memory_to_bytes(requested_str)
+    
+    if requested_bytes == 0:
+        return format_memory_usage(used_str)
+    
+    percentage = (used_bytes / requested_bytes) * 100
+    used_formatted = format_memory_usage(used_str)
+    requested_formatted = format_memory_usage(requested_str)
+    
+    return f"{used_formatted} / {requested_formatted} ({percentage:.0f}%)"
+
+
+def format_cpu_with_percentage(used_str, requested_str):
+    """Format CPU usage with percentage and ratio."""
+    if not used_str:
+        return "N/A"
+    
+    used_millicores = parse_cpu_to_millicores(used_str)
+    
+    if not requested_str:
+        # No limit/request specified, just show usage
+        return format_cpu_usage(used_str)
+    
+    requested_millicores = parse_cpu_to_millicores(requested_str)
+    
+    if requested_millicores == 0:
+        return format_cpu_usage(used_str)
+    
+    percentage = (used_millicores / requested_millicores) * 100
+    used_formatted = format_cpu_usage(used_str)
+    requested_formatted = format_cpu_usage(requested_str)
+    
+    return f"{used_formatted} / {requested_formatted} ({percentage:.0f}%)"
+
+
+def get_pod_metrics(namespace, pod_name):
+    """Get CPU and memory metrics for a pod."""
+    try:
+        metrics_api = get_metrics_client()
+        
+        # Get pod metrics from metrics-server API
+        pod_metrics = metrics_api.get_namespaced_custom_object(
+            group="metrics.k8s.io",
+            version="v1beta1",
+            namespace=namespace,
+            plural="pods",
+            name=pod_name
+        )
+        
+        containers_metrics = {}
+        if 'containers' in pod_metrics:
+            for container_metric in pod_metrics['containers']:
+                container_name = container_metric['name']
+                usage = container_metric.get('usage', {})
+                
+                containers_metrics[container_name] = {
+                    'cpu': format_cpu_usage(usage.get('cpu', '')),
+                    'memory': format_memory_usage(usage.get('memory', ''))
+                }
+        
+        return containers_metrics
+    except Exception as e:
+        app.logger.warning(f"Could not fetch metrics for pod {pod_name}: {e}")
+        return {}
+
+
 @app.route('/')
 def index():
     """Home page with pod list."""
-    return render_template('index.html')
+    # Check if we need to show context selection
+    if not app.config.get('RUNNING_IN_CLUSTER') and not app.config.get('USE_MOCK_DATA'):
+        if 'selected_context' not in session:
+            return redirect(url_for('select_context'))
+    
+    return render_template('index.html', 
+                         k8s_context=app.config.get('K8S_CONTEXT'),
+                         k8s_message=app.config.get('K8S_MESSAGE'),
+                         running_in_cluster=app.config.get('RUNNING_IN_CLUSTER'))
+
+
+@app.route('/contexts')
+def select_context():
+    """Show available Kubernetes contexts for selection."""
+    if app.config.get('RUNNING_IN_CLUSTER'):
+        # Redirect to main page if running in cluster
+        return redirect(url_for('index'))
+    
+    contexts, active_context = get_available_contexts()
+    if not contexts:
+        return render_template('error.html', 
+                             title='No Kubernetes Contexts Found',
+                             message='No Kubernetes contexts found. Please check your kubeconfig file.')
+    
+    return render_template('context_selector.html', 
+                         contexts=contexts, 
+                         active_context=active_context)
+
+
+@app.route('/contexts/<context_name>')
+def use_context(context_name):
+    """Switch to a specific Kubernetes context."""
+    if app.config.get('RUNNING_IN_CLUSTER'):
+        return redirect(url_for('index'))
+    
+    success, context, message = load_k8s_config(context_name)
+    if success:
+        session['selected_context'] = context_name
+        app.config['K8S_CONTEXT'] = context
+        app.config['K8S_MESSAGE'] = message
+        app.logger.info(f"Switched to context: {context_name}")
+        return redirect(url_for('index'))
+    else:
+        contexts, active_context = get_available_contexts()
+        return render_template('context_selector.html', 
+                             contexts=contexts, 
+                             active_context=active_context,
+                             error=f"Failed to switch context: {message}")
 
 
 @app.route('/api/namespaces')
@@ -162,17 +408,20 @@ def get_pods():
         return f'<div class="error">Error: {error_msg}</div>', 500
 
 
-@app.route('/api/pods/<namespace>/<pod_name>')
-def get_pod_details(namespace, pod_name):
-    """Get detailed information about a specific pod as HTML."""
+@app.route('/pods/<namespace>/<pod_name>')
+def pod_details_page(namespace, pod_name):
+    """Show detailed information about a specific pod as a full page."""
     if app.config.get('USE_MOCK_DATA'):
         from kubesight.mock_data import get_mock_pod_details
         pod_data = get_mock_pod_details(namespace, pod_name)
-        return render_template('pod_details_modal.html', pod=pod_data)
+        return render_template('pod_details.html', pod=pod_data)
     
     try:
         v1 = get_k8s_client()
         pod = v1.read_namespaced_pod(pod_name, namespace)
+        
+        # Get metrics for the pod
+        pod_metrics = get_pod_metrics(namespace, pod_name)
         
         # Extract container info
         containers = []
@@ -185,12 +434,42 @@ def get_pod_details(namespace, pod_name):
                         None
                     )
                 
+                # Get metrics for this container
+                container_metrics = pod_metrics.get(container.name, {})
+                
+                # Extract resource requests and limits
+                cpu_request = None
+                memory_request = None
+                cpu_limit = None
+                memory_limit = None
+                
+                if container.resources:
+                    if container.resources.requests:
+                        cpu_request = container.resources.requests.get('cpu')
+                        memory_request = container.resources.requests.get('memory')
+                    if container.resources.limits:
+                        cpu_limit = container.resources.limits.get('cpu')
+                        memory_limit = container.resources.limits.get('memory')
+                
+                # Format metrics with percentages
+                cpu_usage_raw = container_metrics.get('cpu', '')
+                memory_usage_raw = container_metrics.get('memory', '')
+                
+                # Use limit first, then request for percentage calculation
+                cpu_base = cpu_limit or cpu_request
+                memory_base = memory_limit or memory_request
+                
+                cpu_display = format_cpu_with_percentage(cpu_usage_raw, cpu_base) if cpu_base else format_cpu_usage(cpu_usage_raw)
+                memory_display = format_memory_with_percentage(memory_usage_raw, memory_base) if memory_base else format_memory_usage(memory_usage_raw)
+                
                 containers.append({
                     'name': container.name,
                     'image': container.image,
                     'ready': container_status.ready if container_status else False,
                     'restart_count': container_status.restart_count if container_status else 0,
-                    'state': str(container_status.state) if container_status else 'Unknown'
+                    'state': str(container_status.state) if container_status else 'Unknown',
+                    'cpu_usage': cpu_display,
+                    'memory_usage': memory_display
                 })
         
         # Extract labels
@@ -221,29 +500,29 @@ def get_pod_details(namespace, pod_name):
             'conditions': conditions
         }
         
-        return render_template('pod_details_modal.html', pod=pod_data)
+        return render_template('pod_details.html', pod=pod_data)
     except ApiException as e:
         app.logger.error(f"Error fetching pod details: {e}")
         error_msg = 'Failed to fetch pod details' if not app.debug else str(e)
-        return render_template('action_result_modal.html', title='Error', message=error_msg), e.status
+        return f'<div class="error">Error: {error_msg}</div>', e.status
     except Exception as e:
         app.logger.error(f"Error fetching pod details: {e}")
         error_msg = 'Failed to fetch pod details' if not app.debug else str(e)
-        return render_template('action_result_modal.html', title='Error', message=error_msg), 500
+        return f'<div class="error">Error: {error_msg}</div>', 500
 
 
-@app.route('/api/pods/<namespace>/<pod_name>/logs')
-def get_pod_logs(namespace, pod_name):
-    """Get logs from a pod as HTML."""
-    container = request.args.get('container')
+@app.route('/pods/<namespace>/<pod_name>/logs/<container>')
+def pod_logs_page(namespace, pod_name, container):
+    """Show logs from a pod container as a full page."""
     tail_lines = request.args.get('tail', 100, type=int)
     
     if app.config.get('USE_MOCK_DATA'):
         from kubesight.mock_data import get_mock_pod_logs
         log_data = get_mock_pod_logs(namespace, pod_name, container)
-        return render_template('pod_logs_modal.html', 
+        return render_template('logs.html', 
                              pod_name=pod_name, 
-                             container=log_data['container'], 
+                             namespace=namespace,
+                             container=container, 
                              logs=log_data['logs'])
     
     try:
@@ -262,68 +541,96 @@ def get_pod_logs(namespace, pod_name):
             tail_lines=tail_lines
         )
         
-        return render_template('pod_logs_modal.html', 
+        return render_template('logs.html', 
                              pod_name=pod_name, 
+                             namespace=namespace,
                              container=container, 
                              logs=logs)
     except ApiException as e:
         app.logger.error(f"Error fetching pod logs: {e}")
         error_msg = 'Failed to fetch pod logs' if not app.debug else str(e)
-        return render_template('action_result_modal.html', title='Error', message=error_msg), e.status
+        return f'<div class="error">Error: {error_msg}</div>', e.status
     except Exception as e:
         app.logger.error(f"Error fetching pod logs: {e}")
         error_msg = 'Failed to fetch pod logs' if not app.debug else str(e)
-        return render_template('action_result_modal.html', title='Error', message=error_msg), 500
+        return f'<div class="error">Error: {error_msg}</div>', 500
 
 
-@app.route('/api/pods/<namespace>/<pod_name>', methods=['DELETE'])
+@app.route('/pods/<namespace>/<pod_name>/delete')
 def delete_pod(namespace, pod_name):
-    """Delete a pod."""
+    """Delete a pod and redirect to main page."""
     if app.config.get('USE_MOCK_DATA'):
-        return render_template('action_result_modal.html', 
-                             title='Success', 
-                             message=f'Pod {pod_name} deleted successfully (mock mode)')
+        from flask import redirect, url_for, flash
+        flash(f'Pod {pod_name} deleted successfully (mock mode)', 'success')
+        return redirect(url_for('index'))
     
     try:
+        from flask import redirect, url_for, flash
         v1 = get_k8s_client()
         v1.delete_namespaced_pod(pod_name, namespace)
         
-        return render_template('action_result_modal.html', 
-                             title='Success', 
-                             message=f'Pod {pod_name} deleted successfully')
+        flash(f'Pod {pod_name} deleted successfully', 'success')
+        return redirect(url_for('index'))
     except ApiException as e:
+        from flask import redirect, url_for, flash
         app.logger.error(f"Error deleting pod: {e}")
         error_msg = 'Failed to delete pod' if not app.debug else str(e)
-        return render_template('action_result_modal.html', title='Error', message=error_msg), e.status
+        flash(f'Error: {error_msg}', 'error')
+        return redirect(url_for('pod_details_page', namespace=namespace, pod_name=pod_name))
     except Exception as e:
+        from flask import redirect, url_for, flash
         app.logger.error(f"Error deleting pod: {e}")
         error_msg = 'Failed to delete pod' if not app.debug else str(e)
-        return render_template('action_result_modal.html', title='Error', message=error_msg), 500
+        flash(f'Error: {error_msg}', 'error')
+        return redirect(url_for('pod_details_page', namespace=namespace, pod_name=pod_name))
 
 
-@app.route('/api/pods/<namespace>/<pod_name>/restart', methods=['POST'])
+@app.route('/pods/<namespace>/<pod_name>/restart')
 def restart_pod(namespace, pod_name):
     """Restart a pod by deleting it (it will be recreated by its controller)."""
     if app.config.get('USE_MOCK_DATA'):
-        return render_template('action_result_modal.html', 
-                             title='Success', 
-                             message=f'Pod {pod_name} restarted successfully (mock mode)')
+        from flask import redirect, url_for, flash
+        flash(f'Pod {pod_name} restarted successfully (mock mode)', 'success')
+        return redirect(url_for('pod_details_page', namespace=namespace, pod_name=pod_name))
     
     try:
+        from flask import redirect, url_for, flash
         v1 = get_k8s_client()
         v1.delete_namespaced_pod(pod_name, namespace)
         
-        return render_template('action_result_modal.html', 
-                             title='Success', 
-                             message=f'Pod {pod_name} restarted successfully')
+        flash(f'Pod {pod_name} restarted successfully', 'success')
+        return redirect(url_for('pod_details_page', namespace=namespace, pod_name=pod_name))
     except ApiException as e:
+        from flask import redirect, url_for, flash
         app.logger.error(f"Error restarting pod: {e}")
         error_msg = 'Failed to restart pod' if not app.debug else str(e)
-        return render_template('action_result_modal.html', title='Error', message=error_msg), e.status
+        flash(f'Error: {error_msg}', 'error')
+        return redirect(url_for('pod_details_page', namespace=namespace, pod_name=pod_name))
     except Exception as e:
+        from flask import redirect, url_for, flash
         app.logger.error(f"Error restarting pod: {e}")
         error_msg = 'Failed to restart pod' if not app.debug else str(e)
-        return render_template('action_result_modal.html', title='Error', message=error_msg), 500
+        flash(f'Error: {error_msg}', 'error')
+        return redirect(url_for('pod_details_page', namespace=namespace, pod_name=pod_name))
+
+
+@app.route('/api/pods/<namespace>/<pod_name>/metrics')
+def get_pod_metrics_endpoint(namespace, pod_name):
+    """Get CPU and memory metrics for a pod as JSON."""
+    if app.config.get('USE_MOCK_DATA'):
+        return jsonify({
+            'nginx': {
+                'cpu': '15.2m / 100m (15%)',
+                'memory': '64Mi / 128Mi (50%)'
+            }
+        })
+    
+    try:
+        metrics = get_pod_metrics(namespace, pod_name)
+        return jsonify(metrics)
+    except Exception as e:
+        app.logger.error(f"Error fetching pod metrics: {e}")
+        return jsonify({'error': 'Failed to fetch metrics'}), 500
 
 
 if __name__ == '__main__':

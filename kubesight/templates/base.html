@@ -11,12 +11,46 @@
 <body>
     <header>
         <div class="container">
-            <h1>⎈ KubeSight</h1>
-            <p>Kubernetes Monitoring Dashboard</p>
+            <div class="header-content">
+                <div class="header-main">
+                    <h1>⎈ KubeSight</h1>
+                    <p>Kubernetes Monitoring Dashboard</p>
+                </div>
+                
+                <!-- Context Info (only show when not running in cluster) -->
+                {% if k8s_context and not running_in_cluster %}
+                    <div class="context-info">
+                        <a href="/contexts" class="btn btn-sm btn-secondary context-switch-btn">
+                            <span>{{ k8s_context }}</span>
+                        </a>
+                    </div>
+                {% elif running_in_cluster %}
+                    <div class="context-info">
+                        <div class="context-badge cluster-mode">
+                            <span class="context-label">Mode:</span>
+                            <span class="context-name">In-Cluster</span>
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
         </div>
     </header>
     
     <main class="container">
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="flash-messages">
+                    {% for category, message in messages %}
+                        <div class="flash-message flash-{{ category }}">
+                            {{ message }}
+                            <button onclick="this.parentElement.remove()" class="flash-close">&times;</button>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+        
         {% block content %}{% endblock %}
     </main>
     

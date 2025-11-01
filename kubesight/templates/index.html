@@ -28,28 +28,6 @@
                    hx-include="[name='namespace']">
         </div>
         
-        <div class="control-group">
-            <button class="btn btn-primary" 
-                    hx-get="/api/pods" 
-                    hx-target="#pods-table"
-                    hx-include="[name='namespace'],[name='search']">
-                🔄 Refresh
-            </button>
-        </div>
-        
-        <div class="control-group auto-refresh-control">
-            <label>
-                <input type="checkbox" 
-                       id="auto-refresh" 
-                       checked 
-                       _="on change 
-                          if me.checked 
-                            add @hx-trigger='load, every 5s' to #pods-table 
-                          else 
-                            remove @hx-trigger from #pods-table then add @hx-trigger='load' to #pods-table">
-                Auto-refresh (5s)
-            </label>
-        </div>
     </div>
     
     <div id="pods-table"
@@ -59,8 +37,6 @@
          hx-indicator=".refresh-indicator">
         <div class="loading">Loading pods...</div>
     </div>
-    
-    <div id="pod-modal" class="modal"></div>
 </div>
 
 

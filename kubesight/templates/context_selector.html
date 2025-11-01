@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+
+{% block title %}Select Kubernetes Context - KubeSight{% endblock %}
+
+{% block content %}
+<div class="context-selector">
+    <div class="context-header">
+        <h1>Select Kubernetes Context</h1>
+        <p class="context-description">
+            Choose the Kubernetes cluster you want to monitor. KubeSight will use the selected context 
+            from your kubeconfig file.
+        </p>
+    </div>
+
+    {% if error %}
+        <div class="flash-message flash-error">
+            {{ error }}
+        </div>
+    {% endif %}
+
+    <div class="contexts-grid">
+        {% for context in contexts %}
+            <div class="context-card {{ 'active' if context.is_active else '' }}">
+                <div class="context-info">
+                    <h3 class="context-name">
+                        {{ context.name }}
+                        {% if context.is_active %}
+                            <span class="active-badge">Current</span>
+                        {% endif %}
+                    </h3>
+                    
+                    <div class="context-details">
+                        <div class="detail-row">
+                            <span class="label">Cluster:</span>
+                            <span class="value">{{ context.cluster or 'N/A' }}</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="label">User:</span>
+                            <span class="value">{{ context.user or 'N/A' }}</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="label">Namespace:</span>
+                            <span class="value">{{ context.namespace or 'default' }}</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="context-actions">
+                    <a href="/contexts/{{ context.name }}" class="btn btn-primary">
+                        Use This Context
+                    </a>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+
+    <div class="context-footer">
+        <div class="help-text">
+            <h4>Need help?</h4>
+            <ul>
+                <li>Make sure your <code>kubeconfig</code> file is properly configured</li>
+                <li>Use <code>kubectl config get-contexts</code> to list available contexts</li>
+                <li>Use <code>kubectl config use-context &lt;name&gt;</code> to switch contexts manually</li>
+            </ul>
+        </div>
+        
+        <div class="refresh-section">
+            <a href="/contexts" class="btn btn-secondary">
+                🔄 Refresh Contexts
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

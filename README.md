@@ -11,6 +11,7 @@ Built with:
 ## Features
 
 - **Pod Management**: View, inspect, and manage pods across all namespaces
+- **Resource Metrics**: Display real-time CPU and memory usage for containers (requires metrics-server)
 - **Real-time Updates**: Dynamic UI updates using HTMX without full page reloads
 - **Pod Details**: Comprehensive pod information including status, containers, labels, and conditions
 - **Container Logs**: View logs from any container in a pod
@@ -26,6 +27,7 @@ Built with:
 - Python 3.12 or higher
 - Access to a Kubernetes cluster (with `kubectl` configured)
 - `uv` package manager (will be installed if not present)
+- **Optional**: metrics-server deployed in your cluster for CPU/memory metrics
 
 ### Setup
 
@@ -44,6 +46,15 @@ uv sync
 3. Ensure you have access to a Kubernetes cluster:
 ```bash
 kubectl cluster-info
+```
+
+4. **Optional**: Install metrics-server for CPU/memory metrics:
+```bash
+# For most clusters
+kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+
+# For local clusters (minikube, kind, etc.) - add insecure flags
+kubectl patch -n kube-system deployment metrics-server --type='json' -p='[{"op": "add", "path": "/spec/template/spec/containers/0/args/-", "value": "--kubelet-insecure-tls"}]'
 ```
 
 ## Usage
@@ -104,7 +115,8 @@ kubesight/
 - `GET /` - Main dashboard
 - `GET /api/namespaces` - List all namespaces
 - `GET /api/pods?namespace=<ns>&search=<term>` - List pods (with filters)
-- `GET /api/pods/<namespace>/<pod>` - Get pod details
+- `GET /api/pods/<namespace>/<pod>` - Get pod details (includes metrics)
+- `GET /api/pods/<namespace>/<pod>/metrics` - Get pod CPU/memory metrics (JSON)
 - `GET /api/pods/<namespace>/<pod>/logs?container=<name>` - Get pod logs
 - `DELETE /api/pods/<namespace>/<pod>` - Delete a pod
 - `POST /api/pods/<namespace>/<pod>/restart` - Restart a pod
@@ -120,6 +132,58 @@ kubesight/
 - **HTMX**: Enables dynamic HTML updates without JavaScript frameworks
 - **CSS3**: Modern styling with CSS Grid and Flexbox
 - **Vanilla JavaScript**: Minimal JavaScript for enhanced functionality
+
+## Metrics Support
+
+KubeSight displays real-time CPU and memory usage for containers when metrics-server is available in your cluster.
+
+### Setting up metrics-server
+
+**For production clusters:**
+```bash
+kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+```
+
+**For local development clusters (minikube, kind, k3d):**
+```bash
+# Install metrics-server
+kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+
+# Add insecure TLS flag for local clusters
+kubectl patch -n kube-system deployment metrics-server --type='json' \
+  -p='[{"op": "add", "path": "/spec/template/spec/containers/0/args/-", "value": "--kubelet-insecure-tls"}]'
+```
+
+### Verifying metrics-server
+
+Check if metrics-server is working:
+```bash
+# Check if metrics-server is running
+kubectl get pods -n kube-system | grep metrics-server
+
+# Test metrics API
+kubectl top pods
+kubectl top nodes
+```
+
+### Troubleshooting
+
+If metrics are not showing up:
+
+1. **Check metrics-server logs:**
+   ```bash
+   kubectl logs -n kube-system deployment/metrics-server
+   ```
+
+2. **Verify metrics API:**
+   ```bash
+   kubectl get --raw "/apis/metrics.k8s.io/v1beta1/pods"
+   ```
+
+3. **Common issues:**
+   - **Local clusters**: Add `--kubelet-insecure-tls` flag
+   - **Self-signed certificates**: Add `--kubelet-insecure-tls` flag
+   - **Network policies**: Ensure metrics-server can reach kubelets (port 10250)
 
 ## Security Considerations
 

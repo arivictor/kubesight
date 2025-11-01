@@ -132,7 +132,9 @@ def get_mock_pod_details(namespace, pod_name):
                 'image': 'nginx:1.21-alpine',
                 'ready': True,
                 'restart_count': 0,
-                'state': 'Running'
+                'state': 'Running',
+                'cpu_usage': '15.2m / 100m (15%)',
+                'memory_usage': '64Mi / 128Mi (50%)'
             }
         ],
         'conditions': [

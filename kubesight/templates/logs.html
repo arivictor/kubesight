@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block title %}Logs - {{ container }} - {{ pod_name }} - KubeSight{% endblock %}
+
+{% block content %}
+<div class="logs-page">
+    <!-- Navigation Header -->
+    <div class="navigation-header">
+        <a href="/pods/{{ namespace }}/{{ pod_name }}" class="btn btn-secondary">
+            ← Back to Pod Details
+        </a>
+        <div class="page-title">
+            <h1>Container Logs</h1>
+            <p class="log-info">Pod: {{ pod_name }} | Container: {{ container }} | Namespace: {{ namespace }}</p>
+        </div>
+    </div>
+
+    <!-- Logs Controls -->
+    <div class="logs-controls">
+        <div class="control-group">
+            <label for="tail-lines">Show last:</label>
+            <select id="tail-lines" onchange="updateLogs()">
+                <option value="50">50 lines</option>
+                <option value="100" selected>100 lines</option>
+                <option value="200">200 lines</option>
+                <option value="500">500 lines</option>
+                <option value="1000">1000 lines</option>
+            </select>
+        </div>
+        <div class="control-group">
+            <button class="btn btn-primary" onclick="refreshLogs()">
+                🔄 Refresh
+            </button>
+        </div>
+        <div class="control-group">
+            <button class="btn btn-secondary" onclick="downloadLogs()">
+                💾 Download
+            </button>
+        </div>
+    </div>
+
+    <!-- Logs Container -->
+    <div class="logs-section">
+        <div class="logs-container" id="logs-content">
+            <pre>{{ logs if logs else 'No logs available' }}</pre>
+        </div>
+    </div>
+</div>
+
+<script>
+function updateLogs() {
+    const tailLines = document.getElementById('tail-lines').value;
+    const currentUrl = new URL(window.location);
+    currentUrl.searchParams.set('tail', tailLines);
+    window.location.href = currentUrl.toString();
+}
+
+function refreshLogs() {
+    window.location.reload();
+}
+
+function downloadLogs() {
+    const logs = document.querySelector('#logs-content pre').textContent;
+    const blob = new Blob([logs], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `{{ pod_name }}-{{ container }}-logs.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+</script>
+{% endblock %}

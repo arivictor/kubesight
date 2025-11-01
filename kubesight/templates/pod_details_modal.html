@@ -38,6 +38,8 @@
                         <th>Name</th>
                         <th>Image</th>
                         <th>Status</th>
+                        <th>CPU</th>
+                        <th>Memory</th>
                         <th>Restarts</th>
                         <th>Actions</th>
                     </tr>
@@ -49,6 +51,8 @@
                             <td>{{ container.name }}</td>
                             <td>{{ container.image }}</td>
                             <td><span class="status-badge {{ 'status-running' if container.ready else 'status-pending' }}">{{ 'Ready' if container.ready else 'Not Ready' }}</span></td>
+                            <td><span class="metric-value">{{ container.cpu_usage }}</span></td>
+                            <td><span class="metric-value">{{ container.memory_usage }}</span></td>
                             <td>{{ container.restart_count }}</td>
                             <td>
                                 <button class="btn btn-sm btn-secondary"

@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+
+{% block title %}Pod Details - {{ pod.name }} - KubeSight{% endblock %}
+
+{% block content %}
+<div class="pod-details">
+    <!-- Navigation Header -->
+    <div class="navigation-header">
+        <a href="/" class="btn btn-secondary">
+            ← Back to Pod List
+        </a>
+        <div class="page-title">
+            <h1>{{ pod.name }}</h1>
+            <p class="namespace-label">Namespace: {{ pod.namespace }}</p>
+        </div>
+    </div>
+
+    <!-- Overview Section -->
+    <div class="detail-section">
+        <h2>Overview</h2>
+        <div class="detail-grid">
+            <div class="detail-item">
+                <label>Status</label>
+                <span class="status-badge status-{{ pod.status.lower() }}">{{ pod.status }}</span>
+            </div>
+            <div class="detail-item">
+                <label>Node</label>
+                <span>{{ pod.node }}</span>
+            </div>
+            <div class="detail-item">
+                <label>IP Address</label>
+                <span>{{ pod.ip }}</span>
+            </div>
+            <div class="detail-item">
+                <label>Age</label>
+                <span>{{ pod.age }}</span>
+            </div>
+            <div class="detail-item">
+                <label>Created</label>
+                <span>{{ pod.created }}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Labels Section -->
+    <div class="detail-section">
+        <h2>Labels</h2>
+        <div class="labels-container">
+            {% if pod.labels and pod.labels|length > 0 %}
+                {% for key, value in pod.labels.items() %}
+                    <span class="label">{{ key }}: {{ value }}</span>
+                {% endfor %}
+            {% else %}
+                <span class="text-muted">No labels</span>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Containers Section -->
+    <div class="detail-section">
+        <h2>Containers</h2>
+        <div class="containers-grid">
+            {% if pod.containers %}
+                {% for container in pod.containers %}
+                <div class="container-card">
+                    <div class="container-header">
+                        <h3>{{ container.name }}</h3>
+                        <span class="status-badge {{ 'status-running' if container.ready else 'status-pending' }}">
+                            {{ 'Ready' if container.ready else 'Not Ready' }}
+                        </span>
+                    </div>
+                    
+                    <div class="container-details">
+                        <div class="detail-row">
+                            <label>Image</label>
+                            <span class="image-name">{{ container.image }}</span>
+                        </div>
+                        <div class="detail-row">
+                            <label>CPU Usage</label>
+                            <span class="metric-value">{{ container.cpu_usage }}</span>
+                        </div>
+                        <div class="detail-row">
+                            <label>Memory Usage</label>
+                            <span class="metric-value">{{ container.memory_usage }}</span>
+                        </div>
+                        <div class="detail-row">
+                            <label>Restarts</label>
+                            <span>{{ container.restart_count }}</span>
+                        </div>
+                        <div class="detail-row">
+                            <label>Actions</label>
+                            <a href="/pods/{{ pod.namespace }}/{{ pod.name }}/logs/{{ container.name }}" 
+                               class="btn btn-sm btn-secondary">
+                                📜 View Logs
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <p class="text-muted">No containers found</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Conditions Section -->
+    <div class="detail-section">
+        <h2>Conditions</h2>
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Type</th>
+                    <th>Status</th>
+                    <th>Reason</th>
+                    <th>Last Transition</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if pod.conditions %}
+                    {% for condition in pod.conditions %}
+                    <tr>
+                        <td>{{ condition.type }}</td>
+                        <td><span class="status-badge {{ 'status-running' if condition.status == 'True' else 'status-pending' }}">{{ condition.status }}</span></td>
+                        <td>{{ condition.reason }}</td>
+                        <td>{{ condition.last_transition }}</td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="4" class="text-muted">No conditions available</td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="action-section">
+        <a href="/pods/{{ pod.namespace }}/{{ pod.name }}/delete" 
+           class="btn btn-danger"
+           onclick="return confirm('Are you sure you want to delete pod {{ pod.name }}?')">
+            🗑️ Delete Pod
+        </a>
+        <a href="/pods/{{ pod.namespace }}/{{ pod.name }}/restart" 
+           class="btn btn-warning"
+           onclick="return confirm('Are you sure you want to restart pod {{ pod.name }}?')">
+            🔄 Restart Pod
+        </a>
+    </div>
+</div>
+{% endblock %}
