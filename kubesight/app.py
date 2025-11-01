@@ -419,8 +419,14 @@ def select_context():
                              message='No Kubernetes contexts found. Please check your kubeconfig file.',
                              error_actions=error_actions)
     
+    # Override the active context with the app's current context
+    current_app_context = app.config.get('K8S_CONTEXT')
+    
     # Add HATEOAS actions to each context
     for context in contexts:
+        # Mark as active based on app's current context, not kubeconfig active context
+        context['is_active'] = (context['name'] == current_app_context)
+        
         context['_links'] = {
             'self': {'href': f'/api/contexts/{context["name"]}', 'method': 'GET'},
             'use': {'href': f'/contexts/{context["name"]}', 'method': 'GET'},
@@ -428,7 +434,7 @@ def select_context():
         }
         context['_actions'] = []
         
-        if not context.get('is_active'):
+        if not context['is_active']:
             context['_actions'].append({
                 'label': 'USE THIS CONTEXT',
                 'href': f'/contexts/{context["name"]}',
