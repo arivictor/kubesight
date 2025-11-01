@@ -111,15 +111,7 @@ def format_age(created_time):
 
 
 def get_pod_status(pod):
-    """Get simplified pod status."""
-    if pod.status.phase == "Running":
-        # Check if all containers are ready
-        if pod.status.container_statuses:
-            all_ready = all(cs.ready for cs in pod.status.container_statuses)
-            if all_ready:
-                return "Running"
-            else:
-                return "Starting"
+    """Get native Kubernetes pod status."""
     return pod.status.phase
 
 
@@ -591,6 +583,16 @@ def get_pods():
             if pod.status.container_statuses:
                 restart_count = sum(cs.restart_count for cs in pod.status.container_statuses)
             
+            # Get first container name for logs link
+            first_container = None
+            if pod.spec.containers:
+                first_container = pod.spec.containers[0].name
+            
+            # Build logs URL with first container
+            logs_url = f'/pods/{pod_ns}/{pod_name}/logs'
+            if first_container:
+                logs_url = f'/pods/{pod_ns}/{pod_name}/logs/{first_container}'
+            
             pod_data = {
                 'name': pod_name,
                 'namespace': pod_ns,
@@ -601,7 +603,7 @@ def get_pods():
                 'node': pod.spec.node_name or 'N/A',
                 '_links': {
                     'self': {'href': f'/pods/{pod_ns}/{pod_name}', 'method': 'GET'},
-                    'logs': {'href': f'/pods/{pod_ns}/{pod_name}/logs', 'method': 'GET'},
+                    'logs': {'href': logs_url, 'method': 'GET'},
                     'delete': {'href': f'/pods/{pod_ns}/{pod_name}/delete', 'method': 'POST'},
                     'restart': {'href': f'/pods/{pod_ns}/{pod_name}/restart', 'method': 'POST'}
                 }
@@ -882,52 +884,75 @@ def delete_pod(namespace, pod_name):
         return redirect(url_for('pod_details_page', namespace=namespace, pod_name=pod_name))
 
 
-@app.route('/pods/<namespace>/<pod_name>/restart')
-def restart_pod(namespace, pod_name):
-    """Restart a pod by deleting it (it will be recreated by its controller)."""
+@app.route('/api/pods/<namespace>/<pod_name>/restart', methods=['POST'])
+def api_restart_pod(namespace, pod_name):
+    """API endpoint to restart a pod by deleting it."""
     if app.config.get('USE_MOCK_DATA'):
-        from flask import redirect, url_for, flash
-        flash(f'Pod {pod_name} restarted successfully (mock mode)', 'success')
-        return redirect(url_for('pod_details_page', namespace=namespace, pod_name=pod_name))
+        return render_template('action_result_modal.html', 
+                             title='Action Successful',
+                             message=f'Pod {pod_name} in namespace {namespace} has been restarted (mock mode).',
+                             status='success')
     
     try:
-        from flask import redirect, url_for, flash
         v1 = get_k8s_client()
         v1.delete_namespaced_pod(pod_name, namespace)
         
-        flash(f'Pod {pod_name} restarted successfully', 'success')
-        return redirect(url_for('pod_details_page', namespace=namespace, pod_name=pod_name))
+        return render_template('action_result_modal.html', 
+                             title='Action Successful',
+                             message=f'Pod {pod_name} in namespace {namespace} has been restarted.',
+                             status='success')
     except ApiException as e:
-        from flask import redirect, url_for, flash
-        app.logger.error(f"Error restarting pod: {e}")
-        error_msg = 'Failed to restart pod' if not app.debug else str(e)
-        flash(f'Error: {error_msg}', 'error')
-        return redirect(url_for('pod_details_page', namespace=namespace, pod_name=pod_name))
+        return render_template('action_result_modal.html', 
+                             title='Action Failed',
+                             message=f'Failed to restart pod {pod_name}: {e.reason}',
+                             status='error')
     except Exception as e:
-        from flask import redirect, url_for, flash
-        app.logger.error(f"Error restarting pod: {e}")
-        error_msg = 'Failed to restart pod' if not app.debug else str(e)
-        flash(f'Error: {error_msg}', 'error')
-        return redirect(url_for('pod_details_page', namespace=namespace, pod_name=pod_name))
+        return render_template('action_result_modal.html', 
+                             title='Action Failed',
+                             message=f'Failed to restart pod {pod_name}: {str(e)}',
+                             status='error')
 
 
-@app.route('/api/pods/<namespace>/<pod_name>/metrics')
-def get_pod_metrics_endpoint(namespace, pod_name):
-    """Get CPU and memory metrics for a pod as JSON."""
+@app.route('/api/pods/<namespace>/<pod_name>', methods=['DELETE'])
+def api_delete_pod(namespace, pod_name):
+    """API endpoint to delete a pod."""
     if app.config.get('USE_MOCK_DATA'):
-        return jsonify({
-            'nginx': {
-                'cpu': '15.2m / 100m (15%)',
-                'memory': '64Mi / 128Mi (50%)'
-            }
-        })
+        return render_template('action_result_modal.html', 
+                             title='Action Successful',
+                             message=f'Pod {pod_name} in namespace {namespace} has been deleted (mock mode).',
+                             status='success')
     
     try:
-        metrics = get_pod_metrics(namespace, pod_name)
-        return jsonify(metrics)
+        v1 = get_k8s_client()
+        v1.delete_namespaced_pod(pod_name, namespace)
+        
+        return render_template('action_result_modal.html', 
+                             title='Action Successful',
+                             message=f'Pod {pod_name} in namespace {namespace} has been deleted.',
+                             status='success')
+    except ApiException as e:
+        return render_template('action_result_modal.html', 
+                             title='Action Failed',
+                             message=f'Failed to delete pod {pod_name}: {e.reason}',
+                             status='error')
     except Exception as e:
-        app.logger.error(f"Error fetching pod metrics: {e}")
-        return jsonify({'error': 'Failed to fetch metrics'}), 500
+        return render_template('action_result_modal.html', 
+                             title='Action Failed',
+                             message=f'Failed to delete pod {pod_name}: {str(e)}',
+                             status='error')
+
+
+@app.route('/api/confirm')
+def show_confirmation():
+    """Show confirmation modal before executing an action."""
+    message = request.args.get('message', 'Are you sure?')
+    action_url = request.args.get('action_url', '')
+    method = request.args.get('method', 'POST')
+    
+    return render_template('confirmation_modal.html',
+                         message=message,
+                         action_url=action_url,
+                         method=method)
 
 
 if __name__ == '__main__':

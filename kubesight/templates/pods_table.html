@@ -20,7 +20,9 @@
     <tbody>
         {% for pod in pods %}
         <tr>
-            <td class="pod-name">{{ pod.name }}</td>
+            <td class="pod-name">
+                <a href="{{ pod._links.self.href }}" class="pod-name-link">{{ pod.name }}</a>
+            </td>
             <td>{{ pod.namespace }}</td>
             <td>
                 <span class="status-badge status-{{ pod.status.lower() }}">
@@ -34,18 +36,27 @@
             <td>
                 {% if pod._actions %}
                     {% for action in pod._actions[:2] %}
+                        {% if action.confirm %}
                         <button class="btn btn-sm btn-{{ action.style }}"
-                                hx-{{ action.method.lower() }}="{{ action.href }}"
-                                {% if action.confirm %}hx-confirm="{{ action.confirm }}"{% endif %}
+                                hx-get="/api/confirm"
+                                hx-vals='{"message": "{{ action.confirm }}", "action_url": "{{ action.href }}", "method": "{{ action.method }}"}'
                                 hx-target="body"
                                 hx-swap="innerHTML">
                             {{ action.label }}
                         </button>
+                        {% else %}
+                        <button class="btn btn-sm btn-{{ action.style }}"
+                                hx-{{ action.method.lower() }}="{{ action.href }}"
+                                hx-target="body"
+                                hx-swap="innerHTML">
+                            {{ action.label }}
+                        </button>
+                        {% endif %}
                     {% endfor %}
                 {% endif %}
-                <a href="{{ pod._links.self.href }}" 
+                <a href="{{ pod._links.logs.href }}" 
                    class="btn btn-sm btn-primary">
-                    DETAILS
+                    LOGS
                 </a>
             </td>
         </tr>
