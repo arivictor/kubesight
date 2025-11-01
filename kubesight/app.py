@@ -123,6 +123,49 @@ def get_pod_status(pod):
     return pod.status.phase
 
 
+def get_available_actions(pod_data):
+    """Determine available actions based on pod state - HATEOAS compliance."""
+    actions = []
+    namespace = pod_data['namespace']
+    pod_name = pod_data['name']
+    status = pod_data['status']
+    
+    # View logs action - always available if containers exist
+    if pod_data.get('containers'):
+        for container in pod_data['containers']:
+            actions.append({
+                'label': f'LOGS ({container["name"]})',
+                'href': f'/api/pods/{namespace}/{pod_name}/logs?container={container["name"]}',
+                'method': 'GET',
+                'style': 'secondary',
+                'description': f'View logs for container {container["name"]}'
+            })
+    
+    # Restart action - available for running pods
+    if status in ['Running', 'Starting', 'Pending']:
+        actions.append({
+            'label': 'RESTART',
+            'href': f'/api/pods/{namespace}/{pod_name}/restart',
+            'method': 'POST',
+            'style': 'warning',
+            'confirm': f'Are you sure you want to restart pod {pod_name}?',
+            'description': 'Restart the pod by deleting it (will be recreated by controller)'
+        })
+    
+    # Delete action - available for most pods except system pods
+    if not namespace.startswith('kube-') or namespace in ['default', 'production', 'staging', 'development']:
+        actions.append({
+            'label': 'DELETE',
+            'href': f'/api/pods/{namespace}/{pod_name}',
+            'method': 'DELETE',
+            'style': 'danger',
+            'confirm': f'Are you sure you want to delete pod {pod_name}?',
+            'description': 'Permanently delete the pod'
+        })
+    
+    return actions
+
+
 def format_cpu_usage(cpu_str):
     """Format CPU usage from metrics API."""
     if not cpu_str:
@@ -499,6 +542,9 @@ def pod_details_page(namespace, pod_name):
             'containers': containers,
             'conditions': conditions
         }
+        
+        # Add HATEOAS-compliant actions based on pod state
+        pod_data['actions'] = get_available_actions(pod_data)
         
         return render_template('pod_details.html', pod=pod_data)
     except ApiException as e:

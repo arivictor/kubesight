@@ -112,7 +112,7 @@ def get_mock_pods(namespace='default', search=''):
 
 def get_mock_pod_details(namespace, pod_name):
     """Return mock pod details."""
-    return {
+    pod_data = {
         'name': pod_name,
         'namespace': namespace,
         'status': 'Running',
@@ -168,6 +168,35 @@ def get_mock_pod_details(namespace, pod_name):
             }
         ]
     }
+    
+    # Add HATEOAS actions for mock data
+    pod_data['actions'] = [
+        {
+            'label': 'LOGS (nginx)',
+            'href': f'/api/pods/{namespace}/{pod_name}/logs?container=nginx',
+            'method': 'GET',
+            'style': 'secondary',
+            'description': 'View logs for container nginx'
+        },
+        {
+            'label': 'RESTART',
+            'href': f'/api/pods/{namespace}/{pod_name}/restart',
+            'method': 'POST',
+            'style': 'warning',
+            'confirm': f'Are you sure you want to restart pod {pod_name}?',
+            'description': 'Restart the pod'
+        },
+        {
+            'label': 'DELETE',
+            'href': f'/api/pods/{namespace}/{pod_name}',
+            'method': 'DELETE',
+            'style': 'danger',
+            'confirm': f'Are you sure you want to delete pod {pod_name}?',
+            'description': 'Permanently delete the pod'
+        }
+    ]
+    
+    return pod_data
 
 
 def get_mock_pod_logs(namespace, pod_name, container=None):

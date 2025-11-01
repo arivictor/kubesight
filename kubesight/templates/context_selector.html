@@ -21,14 +21,13 @@
     <div class="contexts-grid">
         {% for context in contexts %}
             <div class="context-card {{ 'active' if context.is_active else '' }}">
-                <div class="context-info">
-                    <h3 class="context-name">
+                <h3 class="context-name">
                         {{ context.name }}
                         {% if context.is_active %}
                             <span class="active-badge">Current</span>
                         {% endif %}
                     </h3>
-                    
+                <div class="context-info">
                     <div class="context-details">
                         <div class="detail-row">
                             <span class="label">Cluster:</span>
@@ -66,7 +65,7 @@
         
         <div class="refresh-section">
             <a href="/contexts" class="btn btn-secondary">
-                🔄 Refresh Contexts
+                REFRESH CONTEXTS
             </a>
         </div>
     </div>

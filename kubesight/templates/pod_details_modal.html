@@ -59,7 +59,7 @@
                                         hx-get="/api/pods/{{ pod.namespace }}/{{ pod.name }}/logs?container={{ container.name }}"
                                         hx-target="#pod-modal"
                                         hx-swap="innerHTML">
-                                    📜 Logs
+                                    LOGS
                                 </button>
                             </td>
                         </tr>
@@ -97,20 +97,18 @@
     </div>
     
     <div class="modal-footer">
-        <button class="btn btn-danger"
-                hx-delete="/api/pods/{{ pod.namespace }}/{{ pod.name }}"
-                hx-confirm="Are you sure you want to delete pod {{ pod.name }}?"
-                hx-target="#pod-modal"
-                hx-swap="innerHTML">
-            🗑️ Delete Pod
-        </button>
-        <button class="btn btn-warning"
-                hx-post="/api/pods/{{ pod.namespace }}/{{ pod.name }}/restart"
-                hx-confirm="Are you sure you want to restart pod {{ pod.name }}?"
-                hx-target="#pod-modal"
-                hx-swap="innerHTML">
-            🔄 Restart Pod
-        </button>
+        <!-- Only show actions that are available based on pod state -->
+        {% if pod.actions %}
+            {% for action in pod.actions %}
+                <button class="btn btn-{{ action.style }}"
+                        hx-{{ action.method.lower() }}="{{ action.href }}"
+                        {% if action.confirm %}hx-confirm="{{ action.confirm }}"{% endif %}
+                        hx-target="#pod-modal"
+                        hx-swap="innerHTML">
+                    {{ action.label }}
+                </button>
+            {% endfor %}
+        {% endif %}
         <button class="btn btn-secondary" hx-on:click="document.getElementById('pod-modal').classList.remove('show')">Close</button>
     </div>
 </div>

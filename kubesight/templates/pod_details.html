@@ -91,7 +91,7 @@
                             <label>Actions</label>
                             <a href="/pods/{{ pod.namespace }}/{{ pod.name }}/logs/{{ container.name }}" 
                                class="btn btn-sm btn-secondary">
-                                📜 View Logs
+                                VIEW LOGS
                             </a>
                         </div>
                     </div>
@@ -139,12 +139,12 @@
         <a href="/pods/{{ pod.namespace }}/{{ pod.name }}/delete" 
            class="btn btn-danger"
            onclick="return confirm('Are you sure you want to delete pod {{ pod.name }}?')">
-            🗑️ Delete Pod
+            Delete Pod
         </a>
         <a href="/pods/{{ pod.namespace }}/{{ pod.name }}/restart" 
            class="btn btn-warning"
            onclick="return confirm('Are you sure you want to restart pod {{ pod.name }}?')">
-            🔄 Restart Pod
+            Restart Pod
         </a>
     </div>
 </div>
