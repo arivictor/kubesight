@@ -1,0 +1,112 @@
+<div class="modal-content">
+    <div class="modal-header">
+        <h2>Pod Details: {{ pod.name }}</h2>
+        <button class="btn-close" hx-on:click="document.getElementById('pod-modal').classList.remove('show')">&times;</button>
+    </div>
+    
+    <div class="modal-body">
+        <div class="detail-section">
+            <h3>Overview</h3>
+            <table class="detail-table">
+                <tr><td><strong>Namespace:</strong></td><td>{{ pod.namespace }}</td></tr>
+                <tr><td><strong>Status:</strong></td><td><span class="status-badge status-{{ pod.status.lower() }}">{{ pod.status }}</span></td></tr>
+                <tr><td><strong>Node:</strong></td><td>{{ pod.node }}</td></tr>
+                <tr><td><strong>IP:</strong></td><td>{{ pod.ip }}</td></tr>
+                <tr><td><strong>Age:</strong></td><td>{{ pod.age }}</td></tr>
+                <tr><td><strong>Created:</strong></td><td>{{ pod.created }}</td></tr>
+            </table>
+        </div>
+        
+        <div class="detail-section">
+            <h3>Labels</h3>
+            <div class="labels-container">
+                {% if pod.labels and pod.labels|length > 0 %}
+                    {% for key, value in pod.labels.items() %}
+                        <span class="label">{{ key }}: {{ value }}</span>
+                    {% endfor %}
+                {% else %}
+                    <span class="text-muted">No labels</span>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="detail-section">
+            <h3>Containers</h3>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Image</th>
+                        <th>Status</th>
+                        <th>Restarts</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if pod.containers %}
+                        {% for container in pod.containers %}
+                        <tr>
+                            <td>{{ container.name }}</td>
+                            <td>{{ container.image }}</td>
+                            <td><span class="status-badge {{ 'status-running' if container.ready else 'status-pending' }}">{{ 'Ready' if container.ready else 'Not Ready' }}</span></td>
+                            <td>{{ container.restart_count }}</td>
+                            <td>
+                                <button class="btn btn-sm btn-secondary"
+                                        hx-get="/api/pods/{{ pod.namespace }}/{{ pod.name }}/logs?container={{ container.name }}"
+                                        hx-target="#pod-modal"
+                                        hx-swap="innerHTML">
+                                    📜 Logs
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="detail-section">
+            <h3>Conditions</h3>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Type</th>
+                        <th>Status</th>
+                        <th>Reason</th>
+                        <th>Last Transition</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if pod.conditions %}
+                        {% for condition in pod.conditions %}
+                        <tr>
+                            <td>{{ condition.type }}</td>
+                            <td><span class="status-badge {{ 'status-running' if condition.status == 'True' else 'status-pending' }}">{{ condition.status }}</span></td>
+                            <td>{{ condition.reason }}</td>
+                            <td>{{ condition.last_transition }}</td>
+                        </tr>
+                        {% endfor %}
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <div class="modal-footer">
+        <button class="btn btn-danger"
+                hx-delete="/api/pods/{{ pod.namespace }}/{{ pod.name }}"
+                hx-confirm="Are you sure you want to delete pod {{ pod.name }}?"
+                hx-target="#pod-modal"
+                hx-swap="innerHTML">
+            🗑️ Delete Pod
+        </button>
+        <button class="btn btn-warning"
+                hx-post="/api/pods/{{ pod.namespace }}/{{ pod.name }}/restart"
+                hx-confirm="Are you sure you want to restart pod {{ pod.name }}?"
+                hx-target="#pod-modal"
+                hx-swap="innerHTML">
+            🔄 Restart Pod
+        </button>
+        <button class="btn btn-secondary" hx-on:click="document.getElementById('pod-modal').classList.remove('show')">Close</button>
+    </div>
+</div>

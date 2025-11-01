@@ -1,0 +1,20 @@
+<div class="modal-content">
+    <div class="modal-header">
+        <h2>{{ title }}</h2>
+        <button class="btn-close" 
+                hx-on:click="document.getElementById('pod-modal').classList.remove('show'); document.querySelector('[name=namespace]').dispatchEvent(new Event('change'))">
+            &times;
+        </button>
+    </div>
+    
+    <div class="modal-body">
+        <p>{{ message }}</p>
+    </div>
+    
+    <div class="modal-footer">
+        <button class="btn btn-primary" 
+                hx-on:click="document.getElementById('pod-modal').classList.remove('show'); document.querySelector('[name=namespace]').dispatchEvent(new Event('change'))">
+            OK
+        </button>
+    </div>
+</div>

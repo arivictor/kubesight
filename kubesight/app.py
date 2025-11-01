@@ -81,10 +81,11 @@ def index():
 
 @app.route('/api/namespaces')
 def get_namespaces():
-    """Get list of namespaces."""
+    """Get list of namespaces as HTML options."""
     if app.config.get('USE_MOCK_DATA'):
         from kubesight.mock_data import get_mock_namespaces
-        return jsonify(get_mock_namespaces())
+        ns_list = get_mock_namespaces()['namespaces']
+        return render_template('namespace_options.html', namespaces=ns_list)
     
     try:
         v1 = get_k8s_client()
@@ -96,11 +97,11 @@ def get_namespaces():
             'age': format_age(ns.metadata.creation_timestamp)
         } for ns in namespaces.items]
         
-        return jsonify({'namespaces': ns_list})
+        return render_template('namespace_options.html', namespaces=ns_list)
     except Exception as e:
         app.logger.error(f"Error fetching namespaces: {e}")
         error_msg = 'Failed to fetch namespaces' if not app.debug else str(e)
-        return jsonify({'error': error_msg}), 500
+        return f'<option value="default">Error: {error_msg}</option>', 500
 
 
 @app.route('/api/pods')
@@ -163,10 +164,11 @@ def get_pods():
 
 @app.route('/api/pods/<namespace>/<pod_name>')
 def get_pod_details(namespace, pod_name):
-    """Get detailed information about a specific pod."""
+    """Get detailed information about a specific pod as HTML."""
     if app.config.get('USE_MOCK_DATA'):
         from kubesight.mock_data import get_mock_pod_details
-        return jsonify(get_mock_pod_details(namespace, pod_name))
+        pod_data = get_mock_pod_details(namespace, pod_name)
+        return render_template('pod_details_modal.html', pod=pod_data)
     
     try:
         v1 = get_k8s_client()
@@ -206,7 +208,7 @@ def get_pod_details(namespace, pod_name):
                     'last_transition': format_age(condition.last_transition_time)
                 })
         
-        details = {
+        pod_data = {
             'name': pod.metadata.name,
             'namespace': pod.metadata.namespace,
             'status': get_pod_status(pod),
@@ -219,26 +221,30 @@ def get_pod_details(namespace, pod_name):
             'conditions': conditions
         }
         
-        return jsonify(details)
+        return render_template('pod_details_modal.html', pod=pod_data)
     except ApiException as e:
         app.logger.error(f"Error fetching pod details: {e}")
         error_msg = 'Failed to fetch pod details' if not app.debug else str(e)
-        return jsonify({'error': error_msg}), e.status
+        return render_template('action_result_modal.html', title='Error', message=error_msg), e.status
     except Exception as e:
         app.logger.error(f"Error fetching pod details: {e}")
         error_msg = 'Failed to fetch pod details' if not app.debug else str(e)
-        return jsonify({'error': error_msg}), 500
+        return render_template('action_result_modal.html', title='Error', message=error_msg), 500
 
 
 @app.route('/api/pods/<namespace>/<pod_name>/logs')
 def get_pod_logs(namespace, pod_name):
-    """Get logs from a pod."""
+    """Get logs from a pod as HTML."""
     container = request.args.get('container')
     tail_lines = request.args.get('tail', 100, type=int)
     
     if app.config.get('USE_MOCK_DATA'):
         from kubesight.mock_data import get_mock_pod_logs
-        return jsonify(get_mock_pod_logs(namespace, pod_name, container))
+        log_data = get_mock_pod_logs(namespace, pod_name, container)
+        return render_template('pod_logs_modal.html', 
+                             pod_name=pod_name, 
+                             container=log_data['container'], 
+                             logs=log_data['logs'])
     
     try:
         v1 = get_k8s_client()
@@ -256,60 +262,68 @@ def get_pod_logs(namespace, pod_name):
             tail_lines=tail_lines
         )
         
-        return jsonify({
-            'logs': logs,
-            'container': container
-        })
+        return render_template('pod_logs_modal.html', 
+                             pod_name=pod_name, 
+                             container=container, 
+                             logs=logs)
     except ApiException as e:
         app.logger.error(f"Error fetching pod logs: {e}")
         error_msg = 'Failed to fetch pod logs' if not app.debug else str(e)
-        return jsonify({'error': error_msg}), e.status
+        return render_template('action_result_modal.html', title='Error', message=error_msg), e.status
     except Exception as e:
         app.logger.error(f"Error fetching pod logs: {e}")
         error_msg = 'Failed to fetch pod logs' if not app.debug else str(e)
-        return jsonify({'error': error_msg}), 500
+        return render_template('action_result_modal.html', title='Error', message=error_msg), 500
 
 
 @app.route('/api/pods/<namespace>/<pod_name>', methods=['DELETE'])
 def delete_pod(namespace, pod_name):
     """Delete a pod."""
     if app.config.get('USE_MOCK_DATA'):
-        return jsonify({'message': f'Pod {pod_name} deleted successfully (mock mode)'})
+        return render_template('action_result_modal.html', 
+                             title='Success', 
+                             message=f'Pod {pod_name} deleted successfully (mock mode)')
     
     try:
         v1 = get_k8s_client()
         v1.delete_namespaced_pod(pod_name, namespace)
         
-        return jsonify({'message': f'Pod {pod_name} deleted successfully'})
+        return render_template('action_result_modal.html', 
+                             title='Success', 
+                             message=f'Pod {pod_name} deleted successfully')
     except ApiException as e:
         app.logger.error(f"Error deleting pod: {e}")
         error_msg = 'Failed to delete pod' if not app.debug else str(e)
-        return jsonify({'error': error_msg}), e.status
+        return render_template('action_result_modal.html', title='Error', message=error_msg), e.status
     except Exception as e:
         app.logger.error(f"Error deleting pod: {e}")
         error_msg = 'Failed to delete pod' if not app.debug else str(e)
-        return jsonify({'error': error_msg}), 500
+        return render_template('action_result_modal.html', title='Error', message=error_msg), 500
 
 
 @app.route('/api/pods/<namespace>/<pod_name>/restart', methods=['POST'])
 def restart_pod(namespace, pod_name):
     """Restart a pod by deleting it (it will be recreated by its controller)."""
     if app.config.get('USE_MOCK_DATA'):
-        return jsonify({'message': f'Pod {pod_name} restarted successfully (mock mode)'})
+        return render_template('action_result_modal.html', 
+                             title='Success', 
+                             message=f'Pod {pod_name} restarted successfully (mock mode)')
     
     try:
         v1 = get_k8s_client()
         v1.delete_namespaced_pod(pod_name, namespace)
         
-        return jsonify({'message': f'Pod {pod_name} restarted successfully'})
+        return render_template('action_result_modal.html', 
+                             title='Success', 
+                             message=f'Pod {pod_name} restarted successfully')
     except ApiException as e:
         app.logger.error(f"Error restarting pod: {e}")
         error_msg = 'Failed to restart pod' if not app.debug else str(e)
-        return jsonify({'error': error_msg}), e.status
+        return render_template('action_result_modal.html', title='Error', message=error_msg), e.status
     except Exception as e:
         app.logger.error(f"Error restarting pod: {e}")
         error_msg = 'Failed to restart pod' if not app.debug else str(e)
-        return jsonify({'error': error_msg}), 500
+        return render_template('action_result_modal.html', title='Error', message=error_msg), 500
 
 
 if __name__ == '__main__':

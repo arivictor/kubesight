@@ -28,7 +28,10 @@
             <td>{{ pod.node }}</td>
             <td>
                 <button class="btn btn-sm btn-primary" 
-                        onclick="showPodDetails('{{ pod.namespace }}', '{{ pod.name }}')">
+                        hx-get="/api/pods/{{ pod.namespace }}/{{ pod.name }}"
+                        hx-target="#pod-modal"
+                        hx-swap="innerHTML"
+                        _="on htmx:afterOnLoad add .show to #pod-modal">
                     📋 Details
                 </button>
             </td>
