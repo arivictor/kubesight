@@ -6,14 +6,9 @@ from flask import Flask, render_template, jsonify, request
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
 
-# Flag to track if Kubernetes is available
-K8S_AVAILABLE = False
-
 
 def create_app():
     """Create and configure the Flask application."""
-    global K8S_AVAILABLE
-    
     app = Flask(__name__)
     app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key')
     app.config['USE_MOCK_DATA'] = os.environ.get('USE_MOCK_DATA', 'false').lower() == 'true'
@@ -22,13 +17,11 @@ def create_app():
     try:
         # Try to load in-cluster config first (for running inside K8s)
         config.load_incluster_config()
-        K8S_AVAILABLE = True
         app.logger.info("Using in-cluster Kubernetes configuration")
     except config.ConfigException:
         # Fall back to local kubeconfig (for development)
         try:
             config.load_kube_config()
-            K8S_AVAILABLE = True
             app.logger.info("Using local Kubernetes configuration")
         except config.ConfigException:
             app.logger.warning("No Kubernetes configuration found. Using mock data.")

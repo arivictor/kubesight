@@ -7,11 +7,9 @@
     <div class="controls">
         <div class="control-group">
             <label for="namespace-select">Namespace:</label>
-            <select id="namespace-select" 
+            <select id="namespace-select" name="namespace"
                     hx-get="/api/pods" 
                     hx-target="#pods-table" 
-                    hx-swap="innerHTML"
-                    hx-trigger="change"
                     hx-include="[name='search']">
                 <option value="default">default</option>
                 <option value="all">All Namespaces</option>
@@ -25,27 +23,24 @@
                    name="search" 
                    placeholder="Search pods..."
                    hx-get="/api/pods" 
-                   hx-target="#pods-table" 
-                   hx-swap="innerHTML"
-                   hx-trigger="keyup changed delay:500ms"
+                   hx-trigger="keyup changed delay:500ms" 
+                   hx-target="#pods-table"
                    hx-include="[name='namespace']">
         </div>
         
         <div class="control-group">
             <button class="btn btn-primary" 
                     hx-get="/api/pods" 
-                    hx-target="#pods-table" 
-                    hx-swap="innerHTML"
+                    hx-target="#pods-table"
                     hx-include="[name='namespace'],[name='search']">
                 🔄 Refresh
             </button>
         </div>
     </div>
     
-    <div id="pods-table" 
+    <div id="pods-table"
          hx-get="/api/pods?namespace=default" 
-         hx-trigger="load"
-         hx-swap="innerHTML">
+         hx-trigger="load">
         <div class="loading">Loading pods...</div>
     </div>
     
@@ -53,45 +48,6 @@
 </div>
 
 <script>
-// Add namespace parameter to pods requests
-document.getElementById('namespace-select').addEventListener('change', function(e) {
-    const namespace = e.target.value;
-    const searchInput = document.getElementById('search-input');
-    
-    // Update HTMX attributes with namespace parameter
-    const podsTable = document.getElementById('pods-table');
-    const currentParams = new URLSearchParams();
-    currentParams.set('namespace', namespace);
-    if (searchInput.value) {
-        currentParams.set('search', searchInput.value);
-    }
-    
-    htmx.ajax('GET', '/api/pods?' + currentParams.toString(), {
-        target: '#pods-table',
-        swap: 'innerHTML'
-    });
-});
-
-document.getElementById('search-input').addEventListener('input', function(e) {
-    const search = e.target.value;
-    const namespaceSelect = document.getElementById('namespace-select');
-    const namespace = namespaceSelect.value;
-    
-    const currentParams = new URLSearchParams();
-    currentParams.set('namespace', namespace);
-    if (search) {
-        currentParams.set('search', search);
-    }
-    
-    clearTimeout(window.searchTimeout);
-    window.searchTimeout = setTimeout(() => {
-        htmx.ajax('GET', '/api/pods?' + currentParams.toString(), {
-            target: '#pods-table',
-            swap: 'innerHTML'
-        });
-    }, 500);
-});
-
 // Load namespaces
 fetch('/api/namespaces')
     .then(response => response.json())
@@ -112,14 +68,6 @@ fetch('/api/namespaces')
         }
     })
     .catch(error => console.error('Error loading namespaces:', error));
-
-// Handle HTMX responses
-document.body.addEventListener('htmx:afterSwap', function(event) {
-    if (event.detail.target.id === 'pods-table') {
-        // Pods table updated successfully
-        console.log('Pods table updated');
-    }
-});
 
 // Handle pod actions
 function showPodDetails(namespace, podName) {
