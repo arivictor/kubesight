@@ -18,11 +18,19 @@
                 </div>
                 
                 <!-- Context Info (only show when not running in cluster) -->
-                {% if k8s_context and not running_in_cluster %}
+                {% if k8s_context and not running_in_cluster and context_actions %}
                     <div class="context-info">
-                        <a href="/contexts" class="btn btn-sm btn-secondary context-switch-btn">
-                            <span>{{ k8s_context }}</span>
-                        </a>
+                        {% for action in context_actions %}
+                            <a href="{{ action.href }}" class="btn btn-sm btn-{{ action.style }} context-switch-btn">
+                                <span>{{ k8s_context }}</span>
+                            </a>
+                        {% endfor %}
+                    </div>
+                {% elif k8s_context and not running_in_cluster %}
+                    <div class="context-info">
+                        <span class="context-badge">
+                            <span class="context-name">{{ k8s_context }}</span>
+                        </span>
                     </div>
                 {% elif running_in_cluster %}
                     <div class="context-info">

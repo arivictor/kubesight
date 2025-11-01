@@ -4,27 +4,31 @@
 
 {% block content %}
 <div class="logs-page">
-    <!-- Navigation Header -->
-    <div class="navigation-header">
-        <a href="/pods/{{ namespace }}/{{ pod_name }}" class="btn btn-secondary">
-            ← Back to Pod Details
-        </a>
-        <div class="page-title">
-            <h1>Container Logs</h1>
-            <p class="log-info">Pod: {{ pod_name }} | Container: {{ container }} | Namespace: {{ namespace }}</p>
+    <!-- Navigation Actions -->
+    {% if nav_links and nav_links.back %}
+        <div class="nav-actions">
+            <a href="{{ nav_links.back.href }}" class="btn btn-secondary">
+                ← {{ nav_links.back.label }}
+            </a>
         </div>
+    {% endif %}
+    
+    <!-- Page Info -->
+    <div class="page-info">
+        <h2>CONTAINER LOGS</h2>
+        <p class="log-info">Pod: {{ pod_name }} | Container: {{ container }} | Namespace: {{ namespace }}</p>
     </div>
 
-    <!-- Logs Controls -->
+    <!-- Controls -->
     <div class="logs-controls">
         <div class="control-group">
-            <label for="tail-lines">Show last:</label>
+            <label for="tail-lines">SHOW LAST:</label>
             <select id="tail-lines" onchange="updateLogs()">
-                <option value="50">50 lines</option>
-                <option value="100" selected>100 lines</option>
-                <option value="200">200 lines</option>
-                <option value="500">500 lines</option>
-                <option value="1000">1000 lines</option>
+                <option value="50">50 LINES</option>
+                <option value="100" selected>100 LINES</option>
+                <option value="200">200 LINES</option>
+                <option value="500">500 LINES</option>
+                <option value="1000">1000 LINES</option>
             </select>
         </div>
         <div class="control-group">
@@ -39,7 +43,7 @@
         </div>
     </div>
 
-    <!-- Logs Container -->
+    <!-- Logs Content -->
     <div class="logs-section">
         <div class="logs-container" id="logs-content">
             <pre>{{ logs if logs else 'No logs available' }}</pre>

@@ -32,9 +32,20 @@
             <td>{{ pod.age }}</td>
             <td>{{ pod.node }}</td>
             <td>
-                <a href="/pods/{{ pod.namespace }}/{{ pod.name }}" 
+                {% if pod._actions %}
+                    {% for action in pod._actions[:2] %}
+                        <button class="btn btn-sm btn-{{ action.style }}"
+                                hx-{{ action.method.lower() }}="{{ action.href }}"
+                                {% if action.confirm %}hx-confirm="{{ action.confirm }}"{% endif %}
+                                hx-target="body"
+                                hx-swap="innerHTML">
+                            {{ action.label }}
+                        </button>
+                    {% endfor %}
+                {% endif %}
+                <a href="{{ pod._links.self.href }}" 
                    class="btn btn-sm btn-primary">
-                    Details
+                    DETAILS
                 </a>
             </td>
         </tr>

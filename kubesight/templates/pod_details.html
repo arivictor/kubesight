@@ -6,9 +6,11 @@
 <div class="pod-details">
     <!-- Navigation Header -->
     <div class="navigation-header">
-        <a href="/" class="btn btn-secondary">
-            ← Back to Pod List
-        </a>
+        {% if pod._links and pod._links.dashboard %}
+            <a href="{{ pod._links.dashboard.href }}" class="btn btn-secondary">
+                ← BACK TO DASHBOARD
+            </a>
+        {% endif %}
         <div class="page-title">
             <h1>{{ pod.name }}</h1>
             <p class="namespace-label">Namespace: {{ pod.namespace }}</p>
@@ -89,10 +91,11 @@
                         </div>
                         <div class="detail-row">
                             <label>Actions</label>
-                            <a href="/pods/{{ pod.namespace }}/{{ pod.name }}/logs/{{ container.name }}" 
-                               class="btn btn-sm btn-secondary">
-                                VIEW LOGS
-                            </a>
+                            {% if container._links and container._links.logs %}
+                                <a href="{{ container._links.logs.href }}" class="btn btn-sm btn-secondary">
+                                    VIEW LOGS
+                                </a>
+                            {% endif %}
                         </div>
                     </div>
                 </div>
@@ -134,18 +137,17 @@
         </table>
     </div>
 
-    <!-- Action Buttons -->
+    <!-- HATEOAS Action Buttons -->
     <div class="action-section">
-        <a href="/pods/{{ pod.namespace }}/{{ pod.name }}/delete" 
-           class="btn btn-danger"
-           onclick="return confirm('Are you sure you want to delete pod {{ pod.name }}?')">
-            Delete Pod
-        </a>
-        <a href="/pods/{{ pod.namespace }}/{{ pod.name }}/restart" 
-           class="btn btn-warning"
-           onclick="return confirm('Are you sure you want to restart pod {{ pod.name }}?')">
-            Restart Pod
-        </a>
+        {% if pod.actions %}
+            {% for action in pod.actions %}
+                <a href="{{ action.href }}" 
+                   class="btn btn-{{ action.style }}"
+                   {% if action.confirm %}onclick="return confirm('{{ action.confirm }}')"{% endif %}>
+                    {{ action.label }}
+                </a>
+            {% endfor %}
+        {% endif %}
     </div>
 </div>
 {% endblock %}

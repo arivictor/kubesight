@@ -10,8 +10,11 @@
         <p class="error-message">{{ message }}</p>
         
         <div class="error-actions">
-            <a href="/" class="btn btn-primary">Go to Dashboard</a>
-            <a href="/contexts" class="btn btn-secondary">Select Context</a>
+            {% if error_actions %}
+                {% for action in error_actions %}
+                    <a href="{{ action.href }}" class="btn btn-{{ action.style }}">{{ action.label }}</a>
+                {% endfor %}
+            {% endif %}
         </div>
     </div>
 </div>

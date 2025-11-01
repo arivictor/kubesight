@@ -48,8 +48,8 @@
 }
 
 body {
-    font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', 'Consolas', monospace;
-    font-size: 13px;
+    font-family: 'Roboto', sans-serif;
+    font-size: 16px;
     line-height: 1.4;
     color: var(--text-primary);
     background-color: var(--bg-primary);
@@ -145,6 +145,30 @@ main {
     min-height: calc(100vh - 120px);
 }
 
+/* HATEOAS Navigation Actions */
+.nav-actions {
+    display: flex;
+    gap: var(--space-sm);
+    margin-bottom: var(--space-lg);
+    padding: var(--space-md);
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-secondary);
+}
+
+/* Page Info Section */
+.page-info {
+    margin-bottom: var(--space-lg);
+}
+
+.page-info h2 {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0 0 var(--space-xs) 0;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
 /* Dashboard Controls */
 .controls {
     background: var(--bg-secondary);
@@ -181,7 +205,6 @@ main {
     background: var(--bg-tertiary);
     color: var(--text-primary);
     font-size: 12px;
-    transition: all 0.15s ease;
     font-family: inherit;
 }
 
@@ -207,7 +230,6 @@ main {
     font-size: 11px;
     font-weight: 500;
     cursor: pointer;
-    transition: all 0.15s ease;
     display: inline-flex;
     align-items: center;
     gap: var(--space-xs);
@@ -284,7 +306,6 @@ main {
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.15s ease;
 }
 
 .btn-close:hover {
@@ -320,9 +341,7 @@ main {
     color: var(--text-muted);
 }
 
-.data-table tbody tr {
-    transition: background-color 0.15s ease;
-}
+
 
 .data-table tbody tr:hover {
     background-color: var(--bg-hover);
@@ -526,7 +545,7 @@ main {
 .logs-container {
     background-color: var(--bg-primary);
     padding: var(--space-md);
-    max-height: 600px;
+    max-height: 70vh;
     overflow: auto;
     border: 1px solid var(--border-primary);
 }
@@ -789,14 +808,6 @@ main {
     padding: var(--space-lg);
 }
 
-.logs-container {
-    background-color: var(--bg-primary);
-    padding: var(--space-md);
-    max-height: 70vh;
-    overflow: auto;
-    border: 1px solid var(--border-primary);
-}
-
 /* Action Section */
 .action-section {
     display: flex;
@@ -847,7 +858,6 @@ main {
     background: var(--bg-secondary);
     border: 1px solid var(--border-secondary);
     padding: var(--space-lg);
-    transition: all 0.15s ease;
     position: relative;
 }
 
@@ -1135,7 +1145,6 @@ footer {
     font-weight: 500;
     font-size: 10px;
     opacity: 0;
-    transition: opacity 0.2s ease;
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
@@ -1168,41 +1177,7 @@ footer {
     letter-spacing: 0.5px;
 }
 
-/* Animations */
-@keyframes fadeIn {
-    from {
-        opacity: 0;
-        transform: translateY(-8px) scale(0.95);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0) scale(1);
-    }
-}
 
-@keyframes pulse {
-    0%, 100% {
-        opacity: 0.8;
-    }
-    50% {
-        opacity: 1;
-    }
-}
-
-@keyframes slideIn {
-    from {
-        opacity: 0;
-        transform: translateY(-4px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-.modal.show .modal-content {
-    animation: fadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-}
 
 /* Scrollbar styling */
 ::-webkit-scrollbar {
@@ -1250,10 +1225,4 @@ a:hover {
     color: var(--accent-green-dim);
 }
 
-.refresh-indicator.htmx-request small {
-    animation: pulse 1.2s ease-in-out infinite;
-}
 
-.data-table tbody tr {
-    animation: slideIn 0.15s ease-out;
-}

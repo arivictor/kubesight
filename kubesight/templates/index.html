@@ -4,15 +4,27 @@
 
 {% block content %}
 <div class="dashboard">
+    <!-- HATEOAS Navigation Actions -->
+    {% if nav_actions %}
+        <div class="nav-actions">
+            {% for action in nav_actions %}
+                <a href="{{ action.href }}" class="btn btn-{{ action.style }}" title="{{ action.description }}">
+                    {{ action.label }}
+                </a>
+            {% endfor %}
+        </div>
+    {% endif %}
+    
     <div class="controls">
         <div class="control-group">
-            <label for="namespace-select">Namespace:</label>
-            <select id="namespace-select" name="namespace"
-                    hx-get="/api/namespaces"
+            <label for="namespaceSelect">Namespace:</label>
+            <select name="namespace" id="namespaceSelect" 
+                    hx-get="{{ api_endpoints.namespaces }}"
                     hx-trigger="load"
+                    hx-target="#namespaceSelect"
                     hx-swap="innerHTML"
-                    _="on load or change fetch /api/pods then put the result into #pods-table">
-                <option value="default">default</option>
+                    hx-on::after-swap="htmx.trigger('#pods-table', 'refresh-pods')">
+                <option value="">Loading...</option>
             </select>
         </div>
         
@@ -22,17 +34,16 @@
                    id="search-input" 
                    name="search" 
                    placeholder="Search pods..."
-                   hx-get="/api/pods" 
+                   hx-get="{{ api_endpoints.pods }}" 
                    hx-trigger="keyup changed delay:500ms" 
                    hx-target="#pods-table"
                    hx-include="[name='namespace']">
         </div>
-        
     </div>
     
     <div id="pods-table"
-         hx-get="/api/pods?namespace=default" 
-         hx-trigger="load, every 5s"
+         hx-get="{{ api_endpoints.pods }}" 
+         hx-trigger="change from:#namespaceSelect, refresh-pods"
          hx-include="[name='namespace'],[name='search']"
          hx-indicator=".refresh-indicator">
         <div class="loading">Loading pods...</div>

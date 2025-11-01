@@ -45,9 +45,13 @@
                 </div>
                 
                 <div class="context-actions">
-                    <a href="/contexts/{{ context.name }}" class="btn btn-primary">
-                        Use This Context
-                    </a>
+                    {% if context._actions %}
+                        {% for action in context._actions %}
+                            <a href="{{ action.href }}" class="btn btn-{{ action.style }}">
+                                {{ action.label }}
+                            </a>
+                        {% endfor %}
+                    {% endif %}
                 </div>
             </div>
         {% endfor %}
@@ -64,9 +68,13 @@
         </div>
         
         <div class="refresh-section">
-            <a href="/contexts" class="btn btn-secondary">
-                REFRESH CONTEXTS
-            </a>
+            {% if global_actions %}
+                {% for action in global_actions %}
+                    <a href="{{ action.href }}" class="btn btn-{{ action.style }}">
+                        {{ action.label }}
+                    </a>
+                {% endfor %}
+            {% endif %}
         </div>
     </div>
 </div>

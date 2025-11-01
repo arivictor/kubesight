@@ -131,15 +131,15 @@ def get_available_actions(pod_data):
     status = pod_data['status']
     
     # View logs action - always available if containers exist
-    if pod_data.get('containers'):
-        for container in pod_data['containers']:
-            actions.append({
-                'label': f'LOGS ({container["name"]})',
-                'href': f'/api/pods/{namespace}/{pod_name}/logs?container={container["name"]}',
-                'method': 'GET',
-                'style': 'secondary',
-                'description': f'View logs for container {container["name"]}'
-            })
+    # if pod_data.get('containers'):
+    #     for container in pod_data['containers']:
+    #         actions.append({
+    #             'label': f'LOGS ({container["name"]})',
+    #             'href': f'/pods/{namespace}/{pod_name}/logs/{container["name"]}',
+    #             'method': 'GET',
+    #             'style': 'secondary',
+    #             'description': f'View logs for container {container["name"]}'
+    #         })
     
     # Restart action - available for running pods
     if status in ['Running', 'Starting', 'Pending']:
@@ -315,36 +315,173 @@ def get_pod_metrics(namespace, pod_name):
         return {}
 
 
+@app.route('/api')
+def api_root():
+    """HATEOAS API root - provides entry points to all available API resources."""
+    api_info = {
+        'title': 'KubeSight API',
+        'version': '1.0.0',
+        'description': 'Kubernetes monitoring API with full HATEOAS support',
+        '_links': {
+            'self': {'href': '/api', 'method': 'GET'},
+            'namespaces': {'href': '/api/namespaces', 'method': 'GET'},
+            'pods': {'href': '/api/pods{?namespace,search}', 'method': 'GET', 'templated': True},
+            'contexts': {'href': '/api/contexts', 'method': 'GET'},
+            'dashboard': {'href': '/', 'method': 'GET'}
+        },
+        '_actions': [
+            {
+                'name': 'list_pods',
+                'title': 'List Pods',
+                'method': 'GET',
+                'href': '/api/pods',
+                'fields': [
+                    {'name': 'namespace', 'type': 'text', 'required': False},
+                    {'name': 'search', 'type': 'text', 'required': False}
+                ]
+            },
+            {
+                'name': 'switch_context',
+                'title': 'Switch Context',
+                'method': 'GET',
+                'href': '/contexts/{context_name}',
+                'templated': True
+            }
+        ]
+    }
+    
+    return jsonify(api_info)
+
+
 @app.route('/')
 def index():
-    """Home page with pod list."""
+    """Home page with pod list and HATEOAS navigation."""
     # Check if we need to show context selection
     if not app.config.get('RUNNING_IN_CLUSTER') and not app.config.get('USE_MOCK_DATA'):
         if 'selected_context' not in session:
             return redirect(url_for('select_context'))
     
+    # Add HATEOAS navigation actions
+    nav_actions = [
+
+    ]
+    
+    # Add context switching actions for base template
+    context_actions = []
+    if not app.config.get('RUNNING_IN_CLUSTER'):
+        context_actions = [
+            {
+                'href': '/contexts',
+                'style': 'secondary',
+                'label': 'SWITCH CONTEXT'
+            }
+        ]
+    
+    # Add API endpoints for HTMX requests
+    api_endpoints = {
+        'namespaces': '/api/namespaces',
+        'pods': '/api/pods'
+    }
+    
     return render_template('index.html', 
                          k8s_context=app.config.get('K8S_CONTEXT'),
                          k8s_message=app.config.get('K8S_MESSAGE'),
-                         running_in_cluster=app.config.get('RUNNING_IN_CLUSTER'))
+                         running_in_cluster=app.config.get('RUNNING_IN_CLUSTER'),
+                         nav_actions=nav_actions,
+                         context_actions=context_actions,
+                         api_endpoints=api_endpoints)
 
 
 @app.route('/contexts')
 def select_context():
-    """Show available Kubernetes contexts for selection."""
+    """Show available Kubernetes contexts for selection with HATEOAS actions."""
     if app.config.get('RUNNING_IN_CLUSTER'):
         # Redirect to main page if running in cluster
         return redirect(url_for('index'))
     
     contexts, active_context = get_available_contexts()
     if not contexts:
+        error_actions = [
+            {
+                'href': '/',
+                'style': 'primary',
+                'label': 'GO TO DASHBOARD'
+            },
+            {
+                'href': '/contexts',
+                'style': 'secondary',
+                'label': 'REFRESH CONTEXTS'
+            }
+        ]
+        
         return render_template('error.html', 
                              title='No Kubernetes Contexts Found',
-                             message='No Kubernetes contexts found. Please check your kubeconfig file.')
+                             message='No Kubernetes contexts found. Please check your kubeconfig file.',
+                             error_actions=error_actions)
+    
+    # Add HATEOAS actions to each context
+    for context in contexts:
+        context['_links'] = {
+            'self': {'href': f'/api/contexts/{context["name"]}', 'method': 'GET'},
+            'use': {'href': f'/contexts/{context["name"]}', 'method': 'GET'},
+            'refresh': {'href': '/contexts', 'method': 'GET'}
+        }
+        context['_actions'] = []
+        
+        if not context.get('is_active'):
+            context['_actions'].append({
+                'label': 'USE THIS CONTEXT',
+                'href': f'/contexts/{context["name"]}',
+                'method': 'GET',
+                'style': 'primary',
+                'description': f'Switch to {context["name"]} context'
+            })
+    
+    # Add global actions
+    global_actions = [
+        {
+            'label': 'REFRESH CONTEXTS',
+            'href': '/contexts',
+            'method': 'GET',
+            'style': 'secondary',
+            'description': 'Reload available contexts'
+        }
+    ]
     
     return render_template('context_selector.html', 
                          contexts=contexts, 
-                         active_context=active_context)
+                         active_context=active_context,
+                         global_actions=global_actions)
+
+
+@app.route('/api/contexts')
+def api_contexts():
+    """Get available contexts as JSON with HATEOAS links."""
+    if app.config.get('RUNNING_IN_CLUSTER'):
+        return jsonify({
+            'contexts': [],
+            'message': 'Running in cluster mode',
+            '_links': {
+                'self': {'href': '/api/contexts'},
+                'dashboard': {'href': '/'}
+            }
+        })
+    
+    contexts, active_context = get_available_contexts()
+    for context in contexts:
+        context['_links'] = {
+            'self': {'href': f'/api/contexts/{context["name"]}'},
+            'use': {'href': f'/contexts/{context["name"]}', 'method': 'GET'}
+        }
+    
+    return jsonify({
+        'contexts': contexts,
+        'active_context': active_context,
+        '_links': {
+            'self': {'href': '/api/contexts'},
+            'refresh': {'href': '/contexts', 'method': 'GET'}
+        }
+    })
 
 
 @app.route('/contexts/<context_name>')
@@ -370,21 +507,36 @@ def use_context(context_name):
 
 @app.route('/api/namespaces')
 def get_namespaces():
-    """Get list of namespaces as HTML options."""
+    """Get list of namespaces as HTML options with HATEOAS links."""
     if app.config.get('USE_MOCK_DATA'):
         from kubesight.mock_data import get_mock_namespaces
         ns_list = get_mock_namespaces()['namespaces']
+        # Add HATEOAS actions to each namespace
+        for ns in ns_list:
+            ns['_links'] = {
+                'self': {'href': f'/api/namespaces/{ns["name"]}'},
+                'pods': {'href': f'/api/pods?namespace={ns["name"]}'},
+                'select': {'href': f'/api/namespaces/{ns["name"]}/select', 'method': 'POST'}
+            }
         return render_template('namespace_options.html', namespaces=ns_list)
     
     try:
         v1 = get_k8s_client()
         namespaces = v1.list_namespace()
         
-        ns_list = [{
-            'name': ns.metadata.name,
-            'status': ns.status.phase,
-            'age': format_age(ns.metadata.creation_timestamp)
-        } for ns in namespaces.items]
+        ns_list = []
+        for ns in namespaces.items:
+            ns_data = {
+                'name': ns.metadata.name,
+                'status': ns.status.phase,
+                'age': format_age(ns.metadata.creation_timestamp),
+                '_links': {
+                    'self': {'href': f'/api/namespaces/{ns.metadata.name}'},
+                    'pods': {'href': f'/api/pods?namespace={ns.metadata.name}'},
+                    'select': {'href': f'/api/namespaces/{ns.metadata.name}/select', 'method': 'POST'}
+                }
+            }
+            ns_list.append(ns_data)
         
         return render_template('namespace_options.html', namespaces=ns_list)
     except Exception as e:
@@ -433,15 +585,33 @@ def get_pods():
             if pod.status.container_statuses:
                 restart_count = sum(cs.restart_count for cs in pod.status.container_statuses)
             
-            pod_list.append({
+            pod_data = {
                 'name': pod_name,
                 'namespace': pod_ns,
                 'status': get_pod_status(pod),
                 'ready': f"{ready_containers}/{total_containers}",
                 'restarts': restart_count,
                 'age': format_age(pod.metadata.creation_timestamp),
-                'node': pod.spec.node_name or 'N/A'
-            })
+                'node': pod.spec.node_name or 'N/A',
+                '_links': {
+                    'self': {'href': f'/pods/{pod_ns}/{pod_name}', 'method': 'GET'},
+                    'logs': {'href': f'/pods/{pod_ns}/{pod_name}/logs', 'method': 'GET'},
+                    'delete': {'href': f'/pods/{pod_ns}/{pod_name}/delete', 'method': 'POST'},
+                    'restart': {'href': f'/pods/{pod_ns}/{pod_name}/restart', 'method': 'POST'}
+                }
+            }
+            
+            # Add conditional actions based on pod state
+            pod_status = get_pod_status(pod)
+            if pod_status in ['Running', 'Starting', 'Pending']:
+                pod_data['_actions'] = get_available_actions({
+                    'name': pod_name, 
+                    'namespace': pod_ns, 
+                    'status': pod_status,
+                    'containers': []
+                })
+            
+            pod_list.append(pod_data)
         
         # Return HTML for HTMX
         return render_template('pods_table.html', pods=pod_list)
@@ -546,6 +716,19 @@ def pod_details_page(namespace, pod_name):
         # Add HATEOAS-compliant actions based on pod state
         pod_data['actions'] = get_available_actions(pod_data)
         
+        # Add HATEOAS navigation links
+        pod_data['_links'] = {
+            'self': {'href': f'/pods/{namespace}/{pod_name}'},
+            'dashboard': {'href': '/', 'label': 'Dashboard'},
+            'logs': {'href': f'/pods/{namespace}/{pod_name}/logs', 'method': 'GET'}
+        }
+        
+        # Add container links
+        for container in pod_data.get('containers', []):
+            container['_links'] = {
+                'logs': {'href': f'/pods/{namespace}/{pod_name}/logs/{container["name"]}'}
+            }
+        
         return render_template('pod_details.html', pod=pod_data)
     except ApiException as e:
         app.logger.error(f"Error fetching pod details: {e}")
@@ -587,11 +770,73 @@ def pod_logs_page(namespace, pod_name, container):
             tail_lines=tail_lines
         )
         
+        nav_links = {
+            'back': {
+                'href': f'/pods/{namespace}/{pod_name}',
+                'label': 'BACK TO POD DETAILS'
+            }
+        }
+        
         return render_template('logs.html', 
                              pod_name=pod_name, 
                              namespace=namespace,
                              container=container, 
-                             logs=logs)
+                             logs=logs,
+                             nav_links=nav_links)
+    except ApiException as e:
+        app.logger.error(f"Error fetching pod logs: {e}")
+        error_msg = 'Failed to fetch pod logs' if not app.debug else str(e)
+        return f'<div class="error">Error: {error_msg}</div>', e.status
+    except Exception as e:
+        app.logger.error(f"Error fetching pod logs: {e}")
+        error_msg = 'Failed to fetch pod logs' if not app.debug else str(e)
+        return f'<div class="error">Error: {error_msg}</div>', 500
+
+
+@app.route('/api/pods/<namespace>/<pod_name>/logs')
+def pod_logs_api(namespace, pod_name):
+    """API endpoint for container logs - returns modal content via HTMX."""
+    container = request.args.get('container')
+    tail_lines = request.args.get('tail', 100, type=int)
+    
+    if not container:
+        return '<div class="error">Container parameter required</div>', 400
+    
+    if app.config.get('USE_MOCK_DATA'):
+        from kubesight.mock_data import get_mock_pod_logs
+        log_data = get_mock_pod_logs(namespace, pod_name, container)
+        return render_template('pod_logs_modal.html',
+                             pod_name=pod_name,
+                             namespace=namespace, 
+                             container=container,
+                             logs=log_data['logs'])
+    
+    try:
+        v1 = get_k8s_client()
+        
+        # Get pod logs for the specific container
+        logs = v1.read_namespaced_pod_log(
+            name=pod_name,
+            namespace=namespace,
+            container=container,
+            tail_lines=tail_lines,
+            timestamps=True
+        )
+        
+        # Add HATEOAS navigation for modal
+        nav_links = {
+            'pod_details': f'/pods/{namespace}/{pod_name}',
+            'full_logs': f'/pods/{namespace}/{pod_name}/logs/{container}',
+            'dashboard': '/'
+        }
+        
+        return render_template('pod_logs_modal.html',
+                             pod_name=pod_name,
+                             namespace=namespace,
+                             container=container,
+                             logs=logs,
+                             nav_links=nav_links)
+                             
     except ApiException as e:
         app.logger.error(f"Error fetching pod logs: {e}")
         error_msg = 'Failed to fetch pod logs' if not app.debug else str(e)

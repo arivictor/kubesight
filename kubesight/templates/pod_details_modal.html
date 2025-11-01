@@ -56,7 +56,7 @@
                             <td>{{ container.restart_count }}</td>
                             <td>
                                 <button class="btn btn-sm btn-secondary"
-                                        hx-get="/api/pods/{{ pod.namespace }}/{{ pod.name }}/logs?container={{ container.name }}"
+                                        hx-get="{{ container._links.logs.href }}"
                                         hx-target="#pod-modal"
                                         hx-swap="innerHTML">
                                     LOGS
