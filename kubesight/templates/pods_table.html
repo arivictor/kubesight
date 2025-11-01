@@ -1,0 +1,46 @@
+{% if pods %}
+<table class="data-table">
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Namespace</th>
+            <th>Status</th>
+            <th>Ready</th>
+            <th>Restarts</th>
+            <th>Age</th>
+            <th>Node</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for pod in pods %}
+        <tr>
+            <td class="pod-name">{{ pod.name }}</td>
+            <td>{{ pod.namespace }}</td>
+            <td>
+                <span class="status-badge status-{{ pod.status.lower() }}">
+                    {{ pod.status }}
+                </span>
+            </td>
+            <td>{{ pod.ready }}</td>
+            <td>{{ pod.restarts }}</td>
+            <td>{{ pod.age }}</td>
+            <td>{{ pod.node }}</td>
+            <td>
+                <button class="btn btn-sm btn-primary" 
+                        hx-get="/api/pods/{{ pod.namespace }}/{{ pod.name }}"
+                        hx-target="#pod-modal"
+                        hx-swap="innerHTML"
+                        _="on htmx:afterOnLoad add .show to #pod-modal">
+                    📋 Details
+                </button>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<div class="empty-state">
+    <p>No pods found</p>
+</div>
+{% endif %}

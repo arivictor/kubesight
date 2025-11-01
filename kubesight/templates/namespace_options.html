@@ -1,0 +1,4 @@
+<option value="all">All Namespaces</option>
+{% for ns in namespaces %}
+<option value="{{ ns.name }}" {% if ns.name == 'default' %}selected{% endif %}>{{ ns.name }}</option>
+{% endfor %}

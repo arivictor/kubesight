@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block title %}KubeSight - Dashboard{% endblock %}
+
+{% block content %}
+<div class="dashboard">
+    <div class="controls">
+        <div class="control-group">
+            <label for="namespace-select">Namespace:</label>
+            <select id="namespace-select" name="namespace"
+                    hx-get="/api/namespaces"
+                    hx-trigger="load"
+                    hx-swap="innerHTML"
+                    _="on load or change fetch /api/pods then put the result into #pods-table">
+                <option value="default">default</option>
+            </select>
+        </div>
+        
+        <div class="control-group">
+            <label for="search-input">Search:</label>
+            <input type="text" 
+                   id="search-input" 
+                   name="search" 
+                   placeholder="Search pods..."
+                   hx-get="/api/pods" 
+                   hx-trigger="keyup changed delay:500ms" 
+                   hx-target="#pods-table"
+                   hx-include="[name='namespace']">
+        </div>
+        
+        <div class="control-group">
+            <button class="btn btn-primary" 
+                    hx-get="/api/pods" 
+                    hx-target="#pods-table"
+                    hx-include="[name='namespace'],[name='search']">
+                🔄 Refresh
+            </button>
+        </div>
+    </div>
+    
+    <div id="pods-table"
+         hx-get="/api/pods?namespace=default" 
+         hx-trigger="load">
+        <div class="loading">Loading pods...</div>
+    </div>
+    
+    <div id="pod-modal" class="modal"></div>
+</div>
+
+
+{% endblock %}
