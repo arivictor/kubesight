@@ -106,7 +106,8 @@ def get_namespaces():
         return jsonify({'namespaces': ns_list})
     except Exception as e:
         app.logger.error(f"Error fetching namespaces: {e}")
-        return jsonify({'error': str(e)}), 500
+        error_msg = 'Failed to fetch namespaces' if not app.debug else str(e)
+        return jsonify({'error': error_msg}), 500
 
 
 @app.route('/api/pods')
@@ -163,7 +164,8 @@ def get_pods():
         return render_template('pods_table.html', pods=pod_list)
     except Exception as e:
         app.logger.error(f"Error fetching pods: {e}")
-        return f'<div class="error">Error: {str(e)}</div>', 500
+        error_msg = 'Failed to fetch pods' if not app.debug else str(e)
+        return f'<div class="error">Error: {error_msg}</div>', 500
 
 
 @app.route('/api/pods/<namespace>/<pod_name>')
@@ -227,10 +229,12 @@ def get_pod_details(namespace, pod_name):
         return jsonify(details)
     except ApiException as e:
         app.logger.error(f"Error fetching pod details: {e}")
-        return jsonify({'error': str(e)}), e.status
+        error_msg = 'Failed to fetch pod details' if not app.debug else str(e)
+        return jsonify({'error': error_msg}), e.status
     except Exception as e:
         app.logger.error(f"Error fetching pod details: {e}")
-        return jsonify({'error': str(e)}), 500
+        error_msg = 'Failed to fetch pod details' if not app.debug else str(e)
+        return jsonify({'error': error_msg}), 500
 
 
 @app.route('/api/pods/<namespace>/<pod_name>/logs')
@@ -265,10 +269,12 @@ def get_pod_logs(namespace, pod_name):
         })
     except ApiException as e:
         app.logger.error(f"Error fetching pod logs: {e}")
-        return jsonify({'error': str(e)}), e.status
+        error_msg = 'Failed to fetch pod logs' if not app.debug else str(e)
+        return jsonify({'error': error_msg}), e.status
     except Exception as e:
         app.logger.error(f"Error fetching pod logs: {e}")
-        return jsonify({'error': str(e)}), 500
+        error_msg = 'Failed to fetch pod logs' if not app.debug else str(e)
+        return jsonify({'error': error_msg}), 500
 
 
 @app.route('/api/pods/<namespace>/<pod_name>', methods=['DELETE'])
@@ -284,10 +290,12 @@ def delete_pod(namespace, pod_name):
         return jsonify({'message': f'Pod {pod_name} deleted successfully'})
     except ApiException as e:
         app.logger.error(f"Error deleting pod: {e}")
-        return jsonify({'error': str(e)}), e.status
+        error_msg = 'Failed to delete pod' if not app.debug else str(e)
+        return jsonify({'error': error_msg}), e.status
     except Exception as e:
         app.logger.error(f"Error deleting pod: {e}")
-        return jsonify({'error': str(e)}), 500
+        error_msg = 'Failed to delete pod' if not app.debug else str(e)
+        return jsonify({'error': error_msg}), 500
 
 
 @app.route('/api/pods/<namespace>/<pod_name>/restart', methods=['POST'])
@@ -303,11 +311,15 @@ def restart_pod(namespace, pod_name):
         return jsonify({'message': f'Pod {pod_name} restarted successfully'})
     except ApiException as e:
         app.logger.error(f"Error restarting pod: {e}")
-        return jsonify({'error': str(e)}), e.status
+        error_msg = 'Failed to restart pod' if not app.debug else str(e)
+        return jsonify({'error': error_msg}), e.status
     except Exception as e:
         app.logger.error(f"Error restarting pod: {e}")
-        return jsonify({'error': str(e)}), 500
+        error_msg = 'Failed to restart pod' if not app.debug else str(e)
+        return jsonify({'error': error_msg}), 500
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    import os
+    debug_mode = os.environ.get('FLASK_DEBUG', 'false').lower() == 'true'
+    app.run(host='0.0.0.0', port=5000, debug=debug_mode)
