@@ -8,10 +8,10 @@
         <div class="control-group">
             <label for="namespace-select">Namespace:</label>
             <select id="namespace-select" name="namespace"
-                    hx-get="/api/pods" 
-                    hx-target="#pods-table" 
-                    hx-include="[name='search']"
-                    hx-trigger="load from:body, change">
+                    hx-get="/api/namespaces"
+                    hx-trigger="load"
+                    hx-swap="innerHTML"
+                    _="on load or change fetch /api/pods then put the result into #pods-table">
                 <option value="default">default</option>
             </select>
         </div>
@@ -47,11 +47,5 @@
     <div id="pod-modal" class="modal"></div>
 </div>
 
-<script>
-// Load namespaces using HTMX
-htmx.ajax('GET', '/api/namespaces', {
-    target: '#namespace-select',
-    swap: 'innerHTML'
-});
-</script>
+
 {% endblock %}
